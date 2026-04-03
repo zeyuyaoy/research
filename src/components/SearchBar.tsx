@@ -22,6 +22,7 @@ export default function SearchBar({
                     alt="Pet"
                     width={60}
                     height={60}
+                    loading="eager"
                     className="drop-shadow-sm"
                     style={{
                         filter: 'drop-shadow(0 0 8px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.25))'
