@@ -20,8 +20,7 @@ curl https://your-site.example/api/auth \
 curl "https://your-site.example/api/directory?tag=genomics&source=manual&limit=20"
 ```
 
-Each project includes `slug`, `target`, `shortUrl`, `title`, `description`, `tags`, `source`, dates, repository URL,
-photo-set ID, and timestamps.
+Each project includes `slug`, `target`, `shortUrl`, `title`, `description`, `tags`, `source`, dates, repository URL, and photo-set ID, and timestamps.
 
 ### `GET /api/search`
 
@@ -55,13 +54,11 @@ curl -X POST https://your-site.example/api/links \
   }'
 ```
 
-`slug` and an HTTP(S) `target` are required. Titles are optional and fall back to the normalized slug; the server does
-not fetch the target page. A `{ "links": [...] }` body creates multiple projects and returns per-entry results.
+`slug` and an HTTP(S) `target` are required. Titles are optional and fall back to the normalized slug; the server does not fetch the target page. A `{ "links": [...] }` body creates multiple projects and returns per-entry results.
 
 ### Update: `PUT /api/links`
 
-Send `slug` and the fields to change. The slug itself is immutable. A project object, an array, or `{ "links": [...] }`
-is accepted.
+Send `slug` and the fields to change. The slug itself is immutable. A project object, an array, or `{ "links": [...] }` is accepted.
 
 ### Read: `GET /api/links`
 
@@ -84,8 +81,7 @@ is accepted.
 
 ### Delete: `DELETE /api/links`
 
-Supply `slug`, comma-separated `slugs`, or `tag` in the query or JSON body. Project deletion also removes collection
-references.
+Supply `slug`, comma-separated `slugs`, or `tag` in the query or JSON body. Project deletion also removes collection references.
 
 ## Collections
 
@@ -97,8 +93,7 @@ All `/api/collections` methods require authentication.
 - `PATCH` applies `{ id, addProjects?, removeProjects? }`.
 - `DELETE ?id=<id>` removes a collection.
 
-Project arrays are ordered and every referenced slug must exist. Unknown projects are rejected rather than creating
-disconnected collections.
+Project arrays are ordered and every referenced slug must exist. Unknown projects are rejected rather than creating disconnected collections.
 
 ## Tags
 
@@ -113,16 +108,13 @@ All `/api/tags` methods require authentication and reject unknown project slugs.
 
 ## Analytics
 
-`GET /api/stats` requires authentication and returns only metrics supported by the stored data: `totalLinks`,
-`totalClicks`, `averageClicks`, `uniqueTags`, `sources`, `topProjects`, `topTags`, `tagDistribution`, and `generatedAt`.
+`GET /api/stats` requires authentication and returns only metrics supported by the stored data: `totalLinks`, `totalClicks`, `averageClicks`, `uniqueTags`, `sources`, `topProjects`, `topTags`, `tagDistribution`, and `generatedAt`.
 
-Counts are all-time raw successful redirect requests. Historical week/month/year values cannot be reconstructed, so the
-API does not accept a period parameter.
+Counts are all-time raw successful redirect requests. Historical week/month/year values cannot be reconstructed, so the API does not accept a period parameter.
 
 ## Export
 
-`GET /api/export` requires authentication. `format` may be `json`, `csv`, or `yaml`; unknown values return `400`.
-Optional filters are `source`, `tag`, and `includeClicks=false`.
+`GET /api/export` requires authentication. `format` may be `json`, `csv`, or `yaml`; unknown values return `400`. Optional filters are `source`, `tag`, and `includeClicks=false`.
 
 ```bash
 curl "https://your-site.example/api/export?format=csv" \
@@ -130,13 +122,10 @@ curl "https://your-site.example/api/export?format=csv" \
   -o research.csv
 ```
 
-CSV strings that spreadsheet software could interpret as formulas are prefixed with an inert apostrophe. Use JSON for a
-lossless machine backup.
+CSV strings that spreadsheet software could interpret as formulas are prefixed with an inert apostrophe. Use JSON for a lossless machine backup.
 
 ## Redirects and ORCID
 
-`GET /<slug>` increments the all-time count best-effort, sets `noindex` and `no-store`, and returns `308` for permanent
-projects or `307` otherwise.
+`GET /<slug>` increments the all-time count best-effort, sets `noindex` and `no-store`, and returns `308` for permanent projects or `307` otherwise.
 
-When `ORCID_ID` is configured, the homepage imports public works from ORCID’s v3 API. Responses are cached for one hour;
-malformed works are skipped individually, DOI URLs are normalized safely, and existing Redis metadata is preserved.
+When `ORCID_ID` is configured, the homepage imports public works from ORCID’s v3 API. Responses are cached for one hour; malformed works are skipped individually, DOI URLs are normalized safely, and existing Redis metadata is preserved.

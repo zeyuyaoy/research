@@ -1,8 +1,6 @@
-Hey! This is a searchable repository for my research projects built with Next.js, Redis, and React. However, you can
-also use it as a template for your own research site.
+Hey! This is a searchable repository for my research projects built with Next.js, Redis, and React. However, you can also use it as a template for your own research site.
 
-This app allows you to organize research projects with tags, descriptions, and links, making them easily discoverable
-through a clean search interface.
+This app allows you to organize research projects with tags, descriptions, and links, making them easily discoverable through a clean search interface.
 
 ### Features
 
@@ -42,14 +40,11 @@ Open the local site at `http://localhost:3000`; the dashboard is at `/admin`.
 ### Data model
 
 - `link:<slug>` — canonical HTTP(S) target
-- `meta:<slug>` — hash containing `title`, `description`, comma-separated `tags`, `permanent`, `createdAt`, `updatedAt`,
-  `startDate`, `endDate`, `githubRepo`, and optional `photoSetId`
+- `meta:<slug>` — hash containing `title`, `description`, comma-separated `tags`, `permanent`, `createdAt`, `updatedAt`, `startDate`, `endDate`, `githubRepo`, and optional `photoSetId`
 - `count:<slug>` — all-time successful redirect count
-- `collection:<id>` — hash containing `name`, `description`, comma-separated ordered `projects`, comma-separated `tags`,
-  and timestamps
+- `collection:<id>` — hash containing `name`, `description`, comma-separated ordered `projects`, comma-separated `tags`, and timestamps
 
-Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Deleting a project also removes its slug from collections. Photo sets
-are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug.
+Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Deleting a project also removes its slug from collections. Photo sets are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug.
 
 ORCID responses are cached for one hour.
 
@@ -65,10 +60,7 @@ pnpm check
 
 ### Deployment
 
-Deploy to any Node-compatible Next.js host. For Vercel, import the repository and configure `RESEARCH_REDIS_URL`,
-`ADMIN_KEY`, and optionally `ORCID_ID`. Verify that Redis uses TLS, authentication, persistence, and backups appropriate
-for the deployment. Configure rate limiting or WAF controls at the hosting edge for the public search, directory, and
-redirect routes.
+Deploy to any Node-compatible Next.js host. For Vercel, import the repository and configure `RESEARCH_REDIS_URL`, `ADMIN_KEY`, and optionally `ORCID_ID`. Verify that Redis uses TLS, authentication, persistence, and backups appropriate for the deployment. Configure rate limiting or WAF controls at the hosting edge for the public search, directory, and redirect routes.
 
 The application sends anonymous product telemetry through Vercel Analytics.
 
