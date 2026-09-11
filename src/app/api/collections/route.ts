@@ -1,284 +1,120 @@
-import { getRedisClient } from "@/lib/redis";
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
+import {authorizeAdmin, jsonError, PRIVATE_HEADERS, readJson, routeError} from "@/lib/api";
+import {getDirectorySnapshot, invalidateDirectoryCache} from "@/lib/directory";
+import {normalizeTags, validateCollectionInput} from "@/lib/models";
+import {getRedisClient} from "@/lib/redis";
 
-function unauthorized() {
-  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-}
-
-function isValidCollectionId(id: string): boolean {
-  return /^[a-z0-9-_]+$/i.test(id);
+async function validateProjects(projects: string[]) {
+    const {projects: existing} = await getDirectorySnapshot({fresh: true});
+    const known = new Set(existing.map((project) => project.slug));
+    return projects.filter((project) => !known.has(project));
 }
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY) {
-    return unauthorized();
-  }
-  try {
-    const redis = await getRedisClient();
-    const keys = await redis.keys("collection:*");
-
-    const collections = await Promise.all(
-      keys.map(async (key) => {
-        const id = key.replace("collection:", "");
-        const data = await redis.hGetAll(key);
-        return {
-          id,
-          name: data.name || "",
-          description: data.description || "",
-          projects: data.projects
-            ? data.projects.split(",").filter(Boolean)
-            : [],
-          tags: data.tags ? data.tags.split(",").filter(Boolean) : [],
-          createdAt: data.createdAt || null,
-          updatedAt: data.updatedAt || null,
-        };
-      })
-    );
-
-    return NextResponse.json({ collections });
-  } catch (error) {
-    console.error("Error fetching collections:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const {collections} = await getDirectorySnapshot();
+        return NextResponse.json({collections: collections.toSorted((a, b) => a.name.localeCompare(b.name))}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "GET /api/collections");
+    }
 }
 
 export async function POST(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY) {
-    return unauthorized();
-  }
-
-  try {
-    const body = await req.json();
-    const { id, name, description, projects, tags } = body;
-
-    if (!id || !name) {
-      return NextResponse.json(
-        { error: "id and name are required" },
-        { status: 400 }
-      );
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const parsed = validateCollectionInput(await readJson(req), true);
+        if (!parsed.success) return jsonError(parsed.error, 400);
+        const collection = parsed.data;
+        const missing = await validateProjects(collection.projects || []);
+        if (missing.length > 0) return jsonError("collection references unknown projects", 400, missing);
+        const redis = await getRedisClient();
+        if (await redis.exists(`collection:${collection.id}`)) return jsonError("collection already exists", 409);
+        const now = new Date().toISOString();
+        await redis.hSet(`collection:${collection.id}`, {
+            name: collection.name!,
+            description: collection.description || "",
+            projects: (collection.projects || []).join(","),
+            tags: (collection.tags || []).join(","),
+            createdAt: now,
+            updatedAt: "",
+        });
+        invalidateDirectoryCache();
+        return NextResponse.json({id: collection.id}, {status: 201, headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "POST /api/collections");
     }
-
-    if (!isValidCollectionId(id)) {
-      return NextResponse.json(
-        {
-          error:
-            "id must contain only alphanumeric characters, hyphens, and underscores",
-        },
-        { status: 400 }
-      );
-    }
-
-    const redis = await getRedisClient();
-    const key = `collection:${id}`;
-
-    const exists = await redis.exists(key);
-    if (exists) {
-      return NextResponse.json(
-        { error: "collection already exists" },
-        { status: 409 }
-      );
-    }
-
-    const data: Record<string, string> = {
-      name,
-      description: description || "",
-      projects: Array.isArray(projects) ? projects.join(",") : projects || "",
-      tags: Array.isArray(tags) ? tags.join(",") : tags || "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await redis.hSet(key, data);
-
-    return NextResponse.json({ success: true, id });
-  } catch (error) {
-    console.error("Error saving collection:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
 }
 
 export async function PUT(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY) {
-    return unauthorized();
-  }
-
-  try {
-    const body = await req.json();
-    const { id, name, description, projects, tags } = body;
-
-    if (!id) {
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const parsed = validateCollectionInput(await readJson(req), false);
+        if (!parsed.success) return jsonError(parsed.error, 400);
+        const collection = parsed.data;
+        const redis = await getRedisClient();
+        const key = `collection:${collection.id}`;
+        if (!(await redis.exists(key))) return jsonError("collection not found", 404);
+        if (collection.projects) {
+            const missing = await validateProjects(collection.projects);
+            if (missing.length > 0) return jsonError("collection references unknown projects", 400, missing);
+        }
+        const updates: Record<string, string> = {updatedAt: new Date().toISOString()};
+        if (collection.name !== undefined) updates.name = collection.name || collection.id;
+        if (collection.description !== undefined) updates.description = collection.description;
+        if (collection.projects !== undefined) updates.projects = collection.projects.join(",");
+        if (collection.tags !== undefined) updates.tags = collection.tags.join(",");
+        await redis.hSet(key, updates);
+        invalidateDirectoryCache();
+        return NextResponse.json({id: collection.id}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "PUT /api/collections");
     }
-
-    if (!isValidCollectionId(id)) {
-      return NextResponse.json(
-        {
-          error:
-            "id must contain only alphanumeric characters, hyphens, and underscores",
-        },
-        { status: 400 }
-      );
-    }
-
-    const redis = await getRedisClient();
-    const key = `collection:${id}`;
-
-    const exists = await redis.exists(key);
-    if (!exists) {
-      return NextResponse.json(
-        { error: "collection not found" },
-        { status: 404 }
-      );
-    }
-
-    const updates: Record<string, string> = {};
-    if (name !== undefined) updates.name = name;
-    if (description !== undefined) updates.description = description || "";
-    if (projects !== undefined)
-      updates.projects = Array.isArray(projects)
-        ? projects.join(",")
-        : projects || "";
-    if (tags !== undefined)
-      updates.tags = Array.isArray(tags) ? tags.join(",") : tags || "";
-
-    updates.updatedAt = new Date().toISOString();
-
-    await redis.hSet(key, updates);
-
-    return NextResponse.json({ success: true, id });
-  } catch (error) {
-    console.error("Error updating collection:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
 }
 
 export async function PATCH(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY) {
-    return unauthorized();
-  }
-
-  try {
-    const body = await req.json();
-    const { id, addProjects, removeProjects } = body;
-
-    if (!id) {
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const body = await readJson(req);
+        if (!body || typeof body !== "object") return jsonError("invalid request body", 400);
+        const raw = body as Record<string, unknown>;
+        const parsed = validateCollectionInput({id: raw.id}, false);
+        if (!parsed.success) return jsonError(parsed.error, 400);
+        const addProjects = normalizeTags(raw.addProjects);
+        const removeProjects = new Set(normalizeTags(raw.removeProjects));
+        if (addProjects.length === 0 && removeProjects.size === 0) return jsonError("addProjects or removeProjects is required", 400);
+        const redis = await getRedisClient();
+        const key = `collection:${parsed.data.id}`;
+        const data = await redis.hGetAll(key);
+        if (Object.keys(data).length === 0) return jsonError("collection not found", 404);
+        const missing = await validateProjects(addProjects);
+        if (missing.length > 0) return jsonError("collection references unknown projects", 400, missing);
+        const projects = Array.from(new Set([...normalizeTags(data.projects), ...addProjects])).filter((project) => !removeProjects.has(project));
+        await redis.hSet(key, {projects: projects.join(","), updatedAt: new Date().toISOString()});
+        invalidateDirectoryCache();
+        return NextResponse.json({id: parsed.data.id, projects}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "PATCH /api/collections");
     }
-
-    if (!isValidCollectionId(id)) {
-      return NextResponse.json(
-        {
-          error:
-            "id must contain only alphanumeric characters, hyphens, and underscores",
-        },
-        { status: 400 }
-      );
-    }
-
-    if (
-      (!addProjects || !Array.isArray(addProjects)) &&
-      (!removeProjects || !Array.isArray(removeProjects))
-    ) {
-      return NextResponse.json(
-        { error: "addProjects or removeProjects array is required" },
-        { status: 400 }
-      );
-    }
-
-    const redis = await getRedisClient();
-    const key = `collection:${id}`;
-
-    const exists = await redis.exists(key);
-    if (!exists) {
-      return NextResponse.json(
-        { error: "collection not found" },
-        { status: 404 }
-      );
-    }
-
-    const data = await redis.hGetAll(key);
-    let currentProjects = data.projects
-      ? data.projects.split(",").filter(Boolean)
-      : [];
-
-    if (addProjects && Array.isArray(addProjects)) {
-      const projectsToAdd = addProjects.filter(
-        (p) => p && typeof p === "string"
-      );
-      currentProjects = [...new Set([...currentProjects, ...projectsToAdd])];
-    }
-
-    if (removeProjects && Array.isArray(removeProjects)) {
-      const projectsToRemove = new Set(
-        removeProjects.filter((p) => p && typeof p === "string")
-      );
-      currentProjects = currentProjects.filter((p) => !projectsToRemove.has(p));
-    }
-
-    const updates: Record<string, string> = {
-      projects: currentProjects.join(","),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await redis.hSet(key, updates);
-
-    return NextResponse.json({ success: true, id, projects: currentProjects });
-  } catch (error) {
-    console.error("Error updating collection projects:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
 }
 
 export async function DELETE(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY) {
-    return unauthorized();
-  }
-
-  const { searchParams } = new URL(req.url);
-  const id = searchParams.get("id");
-
-  if (!id) {
-    return NextResponse.json({ error: "id is required" }, { status: 400 });
-  }
-
-  if (!isValidCollectionId(id)) {
-    return NextResponse.json(
-      {
-        error:
-          "id must contain only alphanumeric characters, hyphens, and underscores",
-      },
-      { status: 400 }
-    );
-  }
-
-  try {
-    const redis = await getRedisClient();
-    const exists = await redis.exists(`collection:${id}`);
-    if (!exists) {
-      return NextResponse.json(
-        { error: "Collection not found" },
-        { status: 404 }
-      );
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const id = new URL(req.url).searchParams.get("id");
+        const parsed = validateCollectionInput({id}, false);
+        if (!parsed.success) return jsonError(parsed.error, 400);
+        const redis = await getRedisClient();
+        const deleted = await redis.del(`collection:${parsed.data.id}`);
+        if (!deleted) return jsonError("collection not found", 404);
+        invalidateDirectoryCache();
+        return NextResponse.json({id: parsed.data.id}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "DELETE /api/collections");
     }
-    await redis.del(`collection:${id}`);
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("Error deleting collection:", error);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
-  }
 }

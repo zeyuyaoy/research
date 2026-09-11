@@ -1,166 +1,148 @@
-interface OrcidWork {
-  "put-code": number;
-  title: {
-    title: {
-      value: string;
-    };
-  };
-  "journal-title"?: {
-    value: string;
-  };
-  "short-description"?: string;
-  "publication-date": {
-    year: {
-      value: string;
-    };
-    month?: {
-      value: string;
-    };
-    day?: {
-      value: string;
-    };
-  };
-  url?: {
-    value: string;
-  };
-  "external-ids"?: {
-    "external-id": {
-      "external-id-type": string;
-      "external-id-value": string;
-      "external-id-url": {
-        value: string;
-      };
-    }[];
-  };
+import {invalidateDirectoryCache} from "./directory";
+import {isHttpUrl, ProjectRecord, projectSource} from "./models";
+import {getRedisClient} from "./redis";
+
+type JsonRecord = Record<string, unknown>;
+const ORCID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
+
+function record(value: unknown): JsonRecord | null {
+    return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
 }
 
-interface OrcidWorkGroup {
-  "work-summary": OrcidWork[];
-}
-
-interface LinkItem {
-  slug: string;
-  target: string;
-  shortUrl: string;
-  title: string | null;
-  description: string | null;
-  tags: string[];
-  source: "manual" | "orcid";
-  clicks: number;
-  createdAt?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-}
-
-import { getRedisClient } from "./redis";
-
-export async function getOrcidWorks(orcidId: string): Promise<LinkItem[]> {
-  if (!orcidId) {
-    return [];
-  }
-
-  try {
-    const response = await fetch(
-      `https://pub.orcid.org/v3.0/${orcidId}/works`,
-      {
-        headers: {
-          Accept: "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      console.error("Error fetching ORCID works:", response.statusText);
-      return [];
+function nestedString(value: unknown, path: string[]): string | null {
+    let current: unknown = value;
+    for (const key of path) {
+        const next = record(current);
+        if (!next) return null;
+        current = next[key];
     }
-
-    const data = await response.json();
-    const redis = await getRedisClient();
-
-    const works = await Promise.all(
-      data.group.map(async (workGroup: OrcidWorkGroup) => {
-        const work = workGroup["work-summary"][0] as OrcidWork;
-        const slug = `orcid-${work["put-code"]}`;
-
-        const storedMeta = await redis.hGetAll(`meta:${slug}`);
-        const hasStoredMeta = Object.keys(storedMeta).length > 0;
-
-        if (hasStoredMeta) {
-          return {
-            slug,
-            target: (await redis.get(`link:${slug}`)) || "",
-            shortUrl: `/${slug}`,
-            title: storedMeta.title || work.title.title.value,
-            description:
-              storedMeta.description ||
-              work["short-description"] ||
-              work["journal-title"]?.value ||
-              null,
-            tags: storedMeta.tags
-              ? storedMeta.tags.split(",")
-              : work["journal-title"]
-              ? [work["journal-title"].value]
-              : [],
-            source: "orcid" as const,
-            clicks: Number((await redis.get(`count:${slug}`)) || 0),
-            createdAt: storedMeta.createdAt || null,
-            startDate: storedMeta.startDate || work["publication-date"]?.year?.value || null,
-            endDate: storedMeta.endDate || work["publication-date"]?.year?.value || null,
-          };
-        } else {
-          const externalIds = work["external-ids"]?.["external-id"] || [];
-          const doi = externalIds.find(
-            (id) => id["external-id-type"] === "doi"
-          );
-          const target = doi
-            ? doi["external-id-url"].value
-            : work.url?.value || `https://orcid.org/${orcidId}`;
-
-          await redis.set(`link:${slug}`, target);
-
-          const metadata: Record<string, string> = {
-            permanent: "0",
-            createdAt: new Date().toISOString(),
-            title: work.title.title.value,
-          };
-
-          const description =
-            work["short-description"] || work["journal-title"]?.value;
-          if (description) metadata.description = description;
-
-          const tags = work["journal-title"]
-            ? [work["journal-title"].value]
-            : [];
-          if (tags.length > 0) metadata.tags = tags.join(",");
-
-          const publicationYear = work["publication-date"]?.year?.value;
-          if (publicationYear) {
-            metadata.startDate = publicationYear;
-            metadata.endDate = publicationYear;
-          }
-
-          await redis.hSet(`meta:${slug}`, metadata);
-
-          return {
-            slug,
-            target,
-            shortUrl: `/${slug}`,
-            title: work.title.title.value,
-            description: description || null,
-            tags,
-            source: "orcid" as const,
-            clicks: 0,
-            createdAt: new Date().toISOString(),
-            startDate: publicationYear || null,
-            endDate: publicationYear || null,
-          };
-        }
-      })
-    );
-
-    return works;
-  } catch (error) {
-    console.error("Error fetching ORCID works:", error);
-    return [];
-  }
+    return typeof current === "string" && current.trim() ? current.trim() : null;
 }
+
+function targetForWork(work: JsonRecord, orcidId: string): string {
+    const external = record(work["external-ids"]);
+    const ids = external?.["external-id"];
+    if (Array.isArray(ids)) {
+        for (const candidate of ids) {
+            const id = record(candidate);
+            if (!id || String(id["external-id-type"] || "").toLowerCase() !== "doi") continue;
+            const provided = nestedString(id, ["external-id-url", "value"]);
+            if (provided && isHttpUrl(provided)) return provided;
+            const doi = typeof id["external-id-value"] === "string" ? id["external-id-value"].trim() : "";
+            if (doi) return `https://doi.org/${encodeURI(doi)}`;
+        }
+    }
+    const supplied = nestedString(work, ["url", "value"]);
+    return supplied && isHttpUrl(supplied) ? supplied : `https://orcid.org/${orcidId}`;
+}
+
+export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
+    if (!ORCID_PATTERN.test(orcidId)) return [];
+    try {
+        const response = await fetch(`https://pub.orcid.org/v3.0/${orcidId}/works`, {
+            headers: {Accept: "application/json"},
+            signal: AbortSignal.timeout(5_000),
+            next: {revalidate: 3_600},
+        });
+        if (!response.ok) return [];
+        const payload = record(await response.json());
+        const groups = payload?.group;
+        if (!Array.isArray(groups)) return [];
+
+        const incoming = groups.flatMap((group): Array<{
+            slug: string;
+            title: string;
+            description: string | null;
+            tags: string[];
+            year: string | null;
+            target: string
+        }> => {
+            const summaries = record(group)?.["work-summary"];
+            if (!Array.isArray(summaries) || !summaries.length) return [];
+            const work = record(summaries[0]);
+            if (!work || (typeof work["put-code"] !== "number" && typeof work["put-code"] !== "string")) return [];
+            const title = nestedString(work, ["title", "title", "value"]);
+            if (!title) return [];
+            const journal = nestedString(work, ["journal-title", "value"]);
+            const description = typeof work["short-description"] === "string" ? work["short-description"].trim() || journal : journal;
+            const year = nestedString(work, ["publication-date", "year", "value"]);
+            return [{
+                slug: `orcid-${work["put-code"]}`,
+                title,
+                description,
+                tags: journal ? [journal] : [],
+                year: year && /^\d{4}$/.test(year) ? year : null,
+                target: targetForWork(work, orcidId),
+            }];
+        });
+        if (!incoming.length) return [];
+
+        const redis = await getRedisClient();
+        const reads = redis.multi();
+        incoming.forEach((work) => {
+            reads.get(`link:${work.slug}`);
+            reads.get(`count:${work.slug}`);
+            reads.hGetAll(`meta:${work.slug}`);
+        });
+        const values = await reads.exec();
+        const writes = redis.multi();
+        let writeCount = 0;
+        const projects = incoming.map((work, index): ProjectRecord => {
+            const target = values[index * 3] as unknown as string | null;
+            const clicks = values[index * 3 + 1] as unknown as string | null;
+            const meta = values[index * 3 + 2] as unknown as Record<string, string>;
+            const createdAt = meta?.createdAt || new Date().toISOString();
+            if (!target) {
+                writes.set(`link:${work.slug}`, work.target);
+                writeCount++;
+            }
+            if (!clicks) {
+                writes.set(`count:${work.slug}`, "0");
+                writeCount++;
+            }
+            if (!meta || Object.keys(meta).length === 0) {
+                writes.hSet(`meta:${work.slug}`, {
+                    permanent: "0",
+                    title: work.title,
+                    description: work.description || "",
+                    tags: work.tags.join(","),
+                    createdAt,
+                    updatedAt: "",
+                    startDate: work.year || "",
+                    endDate: work.year || "",
+                    githubRepo: "",
+                    photoSetId: "",
+                });
+                writeCount++;
+            }
+            return {
+                slug: work.slug,
+                target: target || work.target,
+                clicks: Number(clicks || 0),
+                source: projectSource(work.slug),
+                metadata: {
+                    permanent: meta?.permanent === "1",
+                    title: meta?.title || work.title,
+                    description: meta?.description || work.description,
+                    tags: meta?.tags ? meta.tags.split(",").filter(Boolean) : work.tags,
+                    createdAt,
+                    updatedAt: meta?.updatedAt || null,
+                    startDate: meta?.startDate || work.year,
+                    endDate: meta?.endDate || work.year,
+                    githubRepo: meta?.githubRepo || null,
+                    photoSetId: meta?.photoSetId || null,
+                },
+            };
+        });
+        if (writeCount) {
+            await writes.exec();
+            invalidateDirectoryCache();
+        }
+        return projects;
+    } catch (error) {
+        console.error("ORCID synchronization failed:", error instanceof Error ? error.message : "unknown error");
+        return [];
+    }
+}
+
+export {targetForWork};

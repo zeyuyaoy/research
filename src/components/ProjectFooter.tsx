@@ -1,51 +1,18 @@
-interface ProjectFooterProps {
-    totalProjects: number;
-    isSearching: boolean;
-}
-
-export default function ProjectFooter({
-    totalProjects,
-    isSearching: _isSearching,
-}: ProjectFooterProps) {
+export default function ProjectFooter({totalProjects}: { totalProjects: number }) {
     return (
-        <footer className="mt-20 pt-8 border-t text-center" style={{ borderColor: 'var(--card-border)' }}>
-            <p className="text-sm" style={{ color: 'var(--text-color)', opacity: 0.7 }}>
-                {totalProjects > 0 &&
-                    `${totalProjects} project${totalProjects === 1 ? "" : "s"} available!`}{" "}
-                Visit my{" "}
-                <a
-                    href="https://cytronicoder.com/resume"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline transition-opacity hover:opacity-80"
-                    style={{ color: 'var(--primary-color)' }}
-                >
-                    resume
-                </a>{" "}
-                to see all my work.
+        <footer className="mt-10 border-t pt-8 text-center" style={{borderColor: "var(--card-border)"}}>
+            <p className="text-sm opacity-70">
+                {totalProjects > 0 ? `${totalProjects} project${totalProjects === 1 ? "" : "s"} available. ` : ""}
+                Visit my <a href="https://cytronicoder.com/resume" target="_blank" rel="noopener noreferrer"
+                            className="font-semibold hover:underline"
+                            style={{color: "var(--primary-color)"}}>resume</a> to see all my work.
             </p>
-            <p className="mt-2 text-sm" style={{ color: 'var(--text-color)', opacity: 0.7 }}>
-                Check out my{" "}
-                <a
-                    href="https://github.com/cytronicoder"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline transition-opacity hover:opacity-80"
-                    style={{ color: 'var(--primary-color)' }}
-                >
-                    GitHub
-                </a>{" "}
-                for more projects and{" "}
-                <a
-                    href="https://cytronicoder.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:underline transition-opacity hover:opacity-80"
-                    style={{ color: 'var(--primary-color)' }}
-                >
-                    portfolio
-                </a>{" "}
-                for more information.
+            <p className="mt-2 text-sm opacity-70">
+                Find more on <a href="https://github.com/cytronicoder" target="_blank" rel="noopener noreferrer"
+                                className="font-semibold hover:underline"
+                                style={{color: "var(--primary-color)"}}>GitHub</a> and my <a
+                href="https://cytronicoder.com" target="_blank" rel="noopener noreferrer"
+                className="font-semibold hover:underline" style={{color: "var(--primary-color)"}}>portfolio</a>.
             </p>
         </footer>
     );

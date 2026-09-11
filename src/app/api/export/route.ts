@@ -1,207 +1,75 @@
-import { getRedisClient } from "@/lib/redis";
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
+import {dump as dumpYaml} from "js-yaml";
+import {authorizeAdmin, jsonError, PRIVATE_HEADERS, routeError} from "@/lib/api";
+import {getDirectorySnapshot} from "@/lib/directory";
+import {csvCell} from "@/lib/exportCsv";
 
-function unauthorized() {
-  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-}
-
-function escapeYamlString(str: string): string {
-  if (!str) return '""';
-
-  if (/[:#\[\]{},&*!|>'"%@`\n\r\t\\]/.test(str)) {
-    return `"${str
-      .replace(/\\/g, "\\\\")
-      .replace(/"/g, '\\"')
-      .replace(/\n/g, "\\n")
-      .replace(/\r/g, "\\r")
-      .replace(/\t/g, "\\t")}"`;
-  }
-
-  return `"${str}"`;
-}
+type ExportValue = string | number | boolean;
+type ExportRow = Record<string, ExportValue>;
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY)
-    return unauthorized();
-
-  try {
-    const redis = await getRedisClient();
-    const { searchParams } = new URL(req.url);
-    const format = (searchParams.get("format") || "json").toLowerCase();
-    const source = searchParams.get("source");
-    const tag = searchParams.get("tag");
-    const includeClicks = searchParams.get("includeClicks") !== "false";
-
-    const keys = await redis.keys("link:*");
-
-    const pipeline = redis.multi();
-    for (const key of keys) {
-      const slug = key.replace("link:", "");
-      pipeline.get(key);
-      pipeline.get(`count:${slug}`);
-      pipeline.hGetAll(`meta:${slug}`);
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const {searchParams} = new URL(req.url);
+        const format = (searchParams.get("format") || "json").toLowerCase();
+        if (!new Set(["json", "csv", "yaml", "yml"]).has(format)) return jsonError("format must be json, csv, yaml, or yml", 400);
+        const source = searchParams.get("source");
+        if (source && source !== "manual" && source !== "orcid") return jsonError("source must be manual or orcid", 400);
+        const tag = searchParams.get("tag")?.trim().toLowerCase();
+        const includeClicks = searchParams.get("includeClicks") !== "false";
+        const {projects} = await getDirectorySnapshot({fresh: true});
+        const rows: ExportRow[] = projects
+            .filter((project) => !source || project.source === source)
+            .filter((project) => !tag || project.metadata.tags.some((value) => value.toLowerCase().includes(tag)))
+            .sort((a, b) => Date.parse(b.metadata.createdAt) - Date.parse(a.metadata.createdAt))
+            .map((project) => ({
+                slug: project.slug,
+                target: project.target,
+                title: project.metadata.title,
+                description: project.metadata.description || "",
+                tags: project.metadata.tags.join(","),
+                source: project.source,
+                ...(includeClicks ? {clicks: project.clicks} : {}),
+                permanent: project.metadata.permanent,
+                startDate: project.metadata.startDate || "",
+                endDate: project.metadata.endDate || "",
+                githubRepo: project.metadata.githubRepo || "",
+                photoSetId: project.metadata.photoSetId || "",
+                createdAt: project.metadata.createdAt,
+                updatedAt: project.metadata.updatedAt || "",
+            }));
+        const date = new Date().toISOString().slice(0, 10);
+        if (format === "csv") {
+            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "title", "description", "tags", "source", ...(includeClicks ? ["clicks"] : []), "permanent", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
+            const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))].join("\n");
+            return new NextResponse(csv, {
+                headers: {
+                    ...PRIVATE_HEADERS,
+                    "Content-Type": "text/csv; charset=utf-8",
+                    "Content-Disposition": `attachment; filename="research-export-${date}.csv"`
+                }
+            });
+        }
+        if (format === "yaml" || format === "yml") {
+            return new NextResponse(dumpYaml(rows, {noRefs: true, lineWidth: 120}), {
+                headers: {
+                    ...PRIVATE_HEADERS,
+                    "Content-Type": "application/yaml; charset=utf-8",
+                    "Content-Disposition": `attachment; filename="research-export-${date}.yaml"`
+                }
+            });
+        }
+        return NextResponse.json({
+            export: rows,
+            metadata: {
+                total: rows.length,
+                generatedAt: new Date().toISOString(),
+                format: "json",
+                filters: {source: source || "all", tag: tag || null, includeClicks}
+            }
+        }, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "GET /api/export");
     }
-
-    const pipelineResults = await pipeline.exec();
-    if (!pipelineResults) {
-      throw new Error("Pipeline execution failed");
-    }
-
-    const exportData = [];
-
-    for (let i = 0; i < keys.length; i++) {
-      const slug = keys[i].replace("link:", "");
-      const target = pipelineResults[i * 3] as unknown as string | null;
-      const clicks = pipelineResults[i * 3 + 1] as unknown as string | null;
-      const meta = pipelineResults[i * 3 + 2] as unknown as Record<
-        string,
-        string
-      > | null;
-
-      if (!target || !meta) continue;
-
-      let entrySource: "manual" | "orcid" = "manual";
-      if (slug.startsWith("orcid-")) entrySource = "orcid";
-
-      if (source && entrySource !== source) continue;
-      if (tag) {
-        const tags = meta.tags ? meta.tags.split(",").map((t) => t.trim()) : [];
-        const hasMatchingTag = tags.some((entryTag) =>
-          entryTag.toLowerCase().includes(tag.toLowerCase())
-        );
-        if (!hasMatchingTag) continue;
-      }
-
-      const entry: any = {
-        slug,
-        target,
-        title: meta.title || "",
-        description: meta.description || "",
-        tags: meta.tags || "",
-        source: entrySource,
-        permanent: meta.permanent === "1",
-        startDate: meta.startDate || "",
-        endDate: meta.endDate || "",
-        githubRepo: meta.githubRepo || "",
-        createdAt: meta.createdAt || "",
-        updatedAt: meta.updatedAt || "",
-      };
-
-      if (includeClicks) {
-        entry.clicks = Number(clicks || 0);
-      }
-
-      exportData.push(entry);
-    }
-
-    exportData.sort(
-      (a, b) =>
-        new Date(b.createdAt || 0).getTime() -
-        new Date(a.createdAt || 0).getTime()
-    );
-
-    if (format === "csv") {
-      const headers = [
-        "slug",
-        "target",
-        "title",
-        "description",
-        "tags",
-        "source",
-        "permanent",
-        "startDate",
-        "endDate",
-        "githubRepo",
-        "createdAt",
-        "updatedAt",
-      ];
-
-      if (includeClicks) {
-        headers.splice(6, 0, "clicks");
-      }
-
-      const csvContent = [
-        headers.join(","),
-        ...exportData.map((row) =>
-          headers
-            .map((header) => {
-              const value = row[header as keyof typeof row] || "";
-              const stringValue = String(value);
-              if (
-                stringValue.includes(",") ||
-                stringValue.includes('"') ||
-                stringValue.includes("\n")
-              ) {
-                return `"${stringValue.replace(/"/g, '""')}"`;
-              }
-              return stringValue;
-            })
-            .join(",")
-        ),
-      ].join("\n");
-
-      return new NextResponse(csvContent, {
-        headers: {
-          "Content-Type": "text/csv",
-          "Content-Disposition": `attachment; filename="research-export-${
-            new Date().toISOString().split("T")[0]
-          }.csv"`,
-        },
-      });
-    } else if (format === "yaml" || format === "yml") {
-      const yamlContent = exportData
-        .map((entry) => {
-          const yamlEntry = [
-            `slug: ${escapeYamlString(entry.slug)}`,
-            `target: ${escapeYamlString(entry.target)}`,
-            `title: ${escapeYamlString(entry.title)}`,
-            `description: ${escapeYamlString(entry.description)}`,
-            `tags: ${escapeYamlString(entry.tags)}`,
-            `source: ${entry.source}`,
-            `permanent: ${entry.permanent}`,
-            `startDate: ${escapeYamlString(entry.startDate)}`,
-            `endDate: ${escapeYamlString(entry.endDate)}`,
-            `githubRepo: ${escapeYamlString(entry.githubRepo)}`,
-            `createdAt: ${escapeYamlString(entry.createdAt)}`,
-            `updatedAt: ${escapeYamlString(entry.updatedAt)}`,
-          ];
-
-          if (includeClicks) {
-            yamlEntry.splice(6, 0, `clicks: ${entry.clicks}`);
-          }
-
-          return yamlEntry.join("\n");
-        })
-        .join("\n\n---\n\n");
-
-      return new NextResponse(yamlContent, {
-        headers: {
-          "Content-Type": "application/yaml",
-          "Content-Disposition": `attachment; filename="research-export-${
-            new Date().toISOString().split("T")[0]
-          }.yaml"`,
-        },
-      });
-    } else {
-      return NextResponse.json({
-        export: exportData,
-        metadata: {
-          total: exportData.length,
-          generatedAt: new Date().toISOString(),
-          format: "json",
-          filters: {
-            source: source || "all",
-            tag: tag || null,
-            includeClicks,
-          },
-        },
-      });
-    }
-  } catch (error) {
-    console.error("Error exporting data:", error);
-    return NextResponse.json(
-      { error: "failed to export data" },
-      { status: 500 }
-    );
-  }
 }

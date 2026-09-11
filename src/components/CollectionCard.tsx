@@ -1,175 +1,116 @@
 "use client";
 
-import { ChevronDown, ChevronUp } from "lucide-react";
-import { useEffect, useState } from "react";
-import ProjectCard from "./ProjectCard";
+import {ChevronDown} from "lucide-react";
+import {useCallback, useId, useSyncExternalStore} from "react";
+import type {ProjectView} from "@/app/page";
+import type {PhotoSet} from "@/lib/conferenceSlides";
+import {formatResearchDate} from "@/lib/models";
 import ConferenceCarousel from "./ConferenceCarousel";
-import type { PhotoSet } from "@/lib/conferenceSlides";
+import ProjectCard from "./ProjectCard";
 
-interface LinkItem {
-    slug: string;
-    target: string;
-    shortUrl: string;
-    title: string | null;
-    description: string | null;
-    tags: string[];
-    source: "manual" | "orcid";
-    highlights?: string[];
-    startDate?: string | null;
-    endDate?: string | null;
+const COLLECTION_STATE_EVENT = "collection-state-change";
+const collectionStateFallback = new Map<string, boolean>();
+
+function readCollectionState(key: string) {
+    const fallback = collectionStateFallback.get(key);
+    if (fallback !== undefined) return fallback;
+    try {
+        return localStorage.getItem(key) !== "1";
+    } catch {
+        return true;
+    }
 }
 
-interface CollectionProps {
+function writeCollectionState(key: string, expanded: boolean) {
+    collectionStateFallback.set(key, expanded);
+    try {
+        localStorage.setItem(key, expanded ? "0" : "1");
+    } catch { /* Local storage is optional */
+    }
+    window.dispatchEvent(new CustomEvent(COLLECTION_STATE_EVENT, {detail: key}));
+}
+
+export default function CollectionCard({
+                                           id,
+                                           name,
+                                           description,
+                                           projects,
+                                           tags = [],
+                                           highlights = [],
+                                           startDate,
+                                           endDate,
+                                           photoSet
+                                       }: {
     id: string;
     name: string;
     description: string;
-    projects: LinkItem[];
+    projects: ProjectView[];
     tags?: string[];
-    highlights?: Record<string, string[]>;
+    highlights?: string[];
     startDate?: string | null;
     endDate?: string | null;
-    photoSet?: PhotoSet | null;
-}
+    photoSet?: PhotoSet
+}) {
+    const storageKey = `collection:collapsed:${id}`;
+    const subscribe = useCallback((onStoreChange: () => void) => {
+        const handleStorage = (event: StorageEvent) => {
+            if (event.key === storageKey) {
+                collectionStateFallback.set(storageKey, event.newValue !== "1");
+                onStoreChange();
+            }
+        };
+        const handleLocalChange = (event: Event) => {
+            if ((event as CustomEvent<string>).detail === storageKey) onStoreChange();
+        };
+        window.addEventListener("storage", handleStorage);
+        window.addEventListener(COLLECTION_STATE_EVENT, handleLocalChange);
+        return () => {
+            window.removeEventListener("storage", handleStorage);
+            window.removeEventListener(COLLECTION_STATE_EVENT, handleLocalChange);
+        };
+    }, [storageKey]);
 
-export default function CollectionCard({ id, name, description, projects, tags = [], highlights, startDate, endDate, photoSet }: CollectionProps) {
-    const [isExpanded, setIsExpanded] = useState<boolean>(true);
-
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem(`collection:collapsed:${id}`);
-            if (stored === "1") setIsExpanded(false);
-            else if (stored === "0") setIsExpanded(true);
-        } catch (e) {
-            console.error("Error reading collection expanded state:", e);
-        }
-    }, [id]);
-
-    // photo set provided from server via props
-    const collectionPhotoSet = photoSet;
-    const collectionSlides = collectionPhotoSet?.slides;
-
-    if (projects.length === 0) return null;
-
-    const extractYear = (dateString: string | null | undefined): string | null => {
-        if (!dateString) return null;
-        return dateString.substring(0, 4);
-    };
-
-    const extractMonth = (dateString: string | null | undefined): string | null => {
-        if (!dateString || dateString.length < 7) return null;
-        const monthNum = parseInt(dateString.substring(5, 7), 10);
-        if (isNaN(monthNum) || monthNum < 1 || monthNum > 12) return null;
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return months[monthNum - 1];
-    };
-
-    const formatDate = (dateString: string | null | undefined, isRange: boolean = false): string | null => {
-        if (!dateString) return null;
-        const year = extractYear(dateString);
-        const month = extractMonth(dateString);
-        const showPresent = isRange && year === new Date().getFullYear().toString() && !month;
-        const formattedYear = year ? (showPresent ? "present" : year) : null;
-        return month && formattedYear ? `${month} ${formattedYear}` : formattedYear;
-    };
-
-    const startDateDisplay = formatDate(startDate);
-    const endDateDisplay = formatDate(endDate);
-
-    let dateDisplay = "";
-    if (startDateDisplay && endDateDisplay && startDateDisplay === endDateDisplay) {
-        dateDisplay = ` (${startDateDisplay})`;
-    } else if (startDateDisplay && endDateDisplay) {
-        dateDisplay = ` (${formatDate(startDate, true)}-${formatDate(endDate, true)})`;
-    } else if (startDateDisplay) {
-        dateDisplay = ` (${startDateDisplay})`;
-    } else if (endDateDisplay) {
-        dateDisplay = ` (${endDateDisplay})`;
-    }
-
-    const getProjectTags = (projectTags: string[]) => {
-        const merged = [...new Set([...(projectTags || []), ...(tags || [])])];
-        return merged;
-    };
+    const getSnapshot = useCallback(() => readCollectionState(storageKey), [storageKey]);
+    const expanded = useSyncExternalStore(subscribe, getSnapshot, () => true);
+    const panelId = useId();
+    const toggle = () => writeCollectionState(storageKey, !expanded);
+    const start = formatResearchDate(startDate);
+    const end = formatResearchDate(endDate);
+    const dates = start && end && start !== end ? `${start}–${end}` : start || end;
 
     return (
-        <div className="border rounded-xl mb-8 transition-all duration-200 hover:shadow-md" style={{
-            borderColor: 'var(--card-border)',
-            backgroundColor: 'var(--background-color)',
-            borderWidth: '1px'
-        }}>
-            <div
-                className="p-6 flex justify-between items-start cursor-pointer select-none hover:opacity-80 transition-opacity"
-                onClick={() => {
-                    const next = !isExpanded;
-                    setIsExpanded(next);
-                    try {
-                        localStorage.setItem(`collection:collapsed:${id}`, next ? "0" : "1");
-                    } catch (e) {
-                        console.error("Error saving collection expanded state:", e);
-                    }
-                }}
-            >
-                <div className="flex-1 pr-4">
-                    <div className="flex items-center gap-3 mb-2">
-                        <h2 className="text-2xl font-bold" style={{ color: 'var(--text-color)' }}>
-                            {name}
-                            {dateDisplay && (
-                                <span className="text-lg font-normal ml-2" style={{ color: 'var(--text-color)', opacity: 0.5 }}>
-                                    {dateDisplay}
-                                </span>
-                            )}
-                        </h2>
-                        {tags.length > 0 && (
-                            <div className="flex gap-2">
-                                {tags.map(tag => (
-                                    <span key={tag} className="text-xs px-2 py-1 rounded-full opacity-70" style={{
-                                        backgroundColor: 'var(--card-bg)',
-                                        border: '1px solid var(--card-border)',
-                                        color: 'var(--text-color)'
-                                    }}>
-                                        {tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    {description && (
-                        <p className="opacity-70 text-lg" style={{ color: 'var(--text-color)' }}>{description}</p>
-                    )}
-                </div>
-                <div className="mt-1 p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-all duration-200 hover:scale-110 active:scale-95" style={{ color: 'var(--text-color)' }}>
-                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </div>
-            </div>
+        <section className="mb-8 rounded-xl border transition-shadow hover:shadow-md"
+                 style={{borderColor: "var(--card-border)", backgroundColor: "var(--background-color)"}}>
+            <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={panelId}
+                    className="flex w-full items-start justify-between gap-4 rounded-xl p-6 text-left hover:opacity-85 focus-visible:outline-none focus-visible:ring-2">
+                <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-2xl font-bold">{name}</span>
+                        {dates ? <span className="text-lg opacity-55">({dates})</span> : null}
+                        {tags.map((tag) => <span key={tag} className="rounded-full border px-2 py-1 text-xs opacity-75"
+                                                 style={{borderColor: "var(--card-border)"}}>{tag}</span>)}
+                    </span>
+                    {description ? <span className="mt-2 block text-lg opacity-70">{description}</span> : null}
+                </span>
+                <ChevronDown aria-hidden
+                             className={`mt-1 h-5 w-5 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`}/>
+            </button>
 
-            {isExpanded && (
-                <div>
-                    {/* Show collection-specific content (e.g., carousel for bioRSP) */}
-                    {collectionSlides && collectionSlides.length > 0 && (
-                        <div className="px-6 pt-0 pb-4">
-                            <ConferenceCarousel slides={collectionSlides} />
+            {expanded ? <div id={panelId}>
+                {photoSet?.slides.length ?
+                    <div className="px-6 pb-4"><ConferenceCarousel slides={photoSet.slides} caption={photoSet.title}/>
+                    </div> : null}
+                <div className="grid grid-cols-1 items-start gap-4 p-6 pt-0 md:grid-cols-2">
+                    {projects.map((project) =>
+                        <div key={project.slug} className="space-y-4">
+                            <ProjectCard project={{...project, tags: Array.from(new Set([...project.tags, ...tags]))}}
+                                         highlights={highlights}/>
+                            {project.photoSet?.slides.length ? <ConferenceCarousel slides={project.photoSet.slides}
+                                                                                   caption={project.photoSet.title}/> : null}
                         </div>
                     )}
-
-                    <div className="p-6 pt-0 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {projects.map((project) => (
-                            <ProjectCard
-                                key={project.slug}
-                                slug={project.slug}
-                                target={project.target}
-                                title={project.title}
-                                description={project.description}
-                                tags={getProjectTags(project.tags)}
-                                source={project.source}
-                                shortUrl={project.shortUrl}
-                                highlights={highlights?.[project.slug]}
-                                startDate={project.startDate}
-                                endDate={project.endDate}
-                            />
-                        ))}
-                    </div>
                 </div>
-            )}
-        </div>
+            </div> : null}
+        </section>
     );
 }

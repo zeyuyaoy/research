@@ -1,31 +1,29 @@
-import { getRedisClient } from "@/lib/redis";
-import { NextRequest, NextResponse } from "next/server";
+import {NextRequest, NextResponse} from "next/server";
+import {getProject, invalidateDirectoryCache} from "@/lib/directory";
+import {isValidSlug, normalizeSlug} from "@/lib/models";
+import {getRedisClient, RedisUnavailableError} from "@/lib/redis";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
-) {
-  const { slug: slugParam } = await params;
-  const slug = (slugParam || "").trim().toLowerCase();
-  if (!slug) return new NextResponse("OK", { status: 200 });
+const PRIVATE_REDIRECT_HEADERS = {"X-Robots-Tag": "noindex", "Cache-Control": "no-store"};
 
-  const redis = await getRedisClient();
-  const target = await redis.get(`link:${slug}`);
-  if (!target)
-    return new NextResponse("Not found", {
-      status: 404,
-      headers: { "X-Robots-Tag": "noindex" },
+export async function GET(_req: NextRequest, {params}: { params: Promise<{ slug: string }> }) {
+    const slug = normalizeSlug((await params).slug || "");
+    if (!slug || !isValidSlug(slug)) return new NextResponse("Not found", {
+        status: 404,
+        headers: PRIVATE_REDIRECT_HEADERS
     });
-
-  try {
-    await redis.incr(`count:${slug}`);
-  } catch {}
-
-  const res = NextResponse.redirect(target, 301);
-  res.headers.set("X-Robots-Tag", "noindex");
-  res.headers.set(
-    "Cache-Control",
-    "public, s-maxage=300, stale-while-revalidate=600"
-  );
-  return res;
+    try {
+        const project = await getProject(slug);
+        if (!project) return new NextResponse("Not found", {status: 404, headers: PRIVATE_REDIRECT_HEADERS});
+        try {
+            await (await getRedisClient()).incr(`count:${slug}`);
+            invalidateDirectoryCache();
+        } catch { /* Redirects remain available if analytics writes fail. */
+        }
+        const response = NextResponse.redirect(project.target, project.metadata.permanent ? 308 : 307);
+        Object.entries(PRIVATE_REDIRECT_HEADERS).forEach(([name, value]) => response.headers.set(name, value));
+        return response;
+    } catch (error) {
+        if (!(error instanceof RedisUnavailableError)) console.error("Redirect lookup failed:", error);
+        return new NextResponse("Service unavailable", {status: 503, headers: PRIVATE_REDIRECT_HEADERS});
+    }
 }

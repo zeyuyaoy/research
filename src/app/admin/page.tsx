@@ -1,963 +1,604 @@
 "use client";
 
-import ThemeToggle from "@/components/ThemeToggle";
-import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import {FormEvent, useCallback, useEffect, useMemo, useState} from "react";
+import type {AnalyticsSummary, CollectionRecord, ProjectRecord} from "@/lib/models";
 
-interface ApiLinkItem {
-    slug: string;
-    target: string;
-    clicks: number;
-    metadata?: {
-        title?: string;
-        description?: string;
-        tags?: string[];
-        createdAt?: string;
-    };
+type Tab = "projects" | "collections" | "analytics";
+type ProjectForm = {
+    slug: string; target: string; title: string; description: string; tags: string;
+    permanent: boolean; startDate: string; endDate: string; githubRepo: string; photoSetId: string;
+};
+type CollectionForm = { id: string; name: string; description: string; tags: string; projects: string[] };
+
+const EMPTY_PROJECT: ProjectForm = {
+    slug: "",
+    target: "",
+    title: "",
+    description: "",
+    tags: "",
+    permanent: false,
+    startDate: "",
+    endDate: "",
+    githubRepo: "",
+    photoSetId: ""
+};
+const EMPTY_COLLECTION: CollectionForm = {id: "", name: "", description: "", tags: "", projects: []};
+
+function readAdminKey() {
+    try {
+        return sessionStorage.getItem("adminKey") || "";
+    } catch {
+        return "";
+    }
 }
 
-interface LinkItem {
-    slug: string;
-    target: string;
-    clicks: number;
-    shortUrl: string;
-    title: string | null;
-    description: string | null;
-    tags: string[];
-    createdAt: string | null;
+function storeAdminKey(value: string) {
+    try {
+        sessionStorage.setItem("adminKey", value);
+    } catch { /* Session storage is optional. */
+    }
 }
 
-interface AnalyticsData {
-    totalLinks: number;
-    totalClicks: number;
-    sources: { manual: number; orcid: number };
-    topTags: [string, number][];
-    recentActivity: Array<{ slug: string, clicks: number, lastAccessed?: string }>;
-    topPerformers: Array<{ slug: string, clicks: number, title?: string }>;
-    avgClicksPerLink: number;
-    uniqueTags: number;
+function removeAdminKey() {
+    try {
+        sessionStorage.removeItem("adminKey");
+    } catch { /* Session storage is optional. */
+    }
 }
 
-export default function AdminDashboard() {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [password, setPassword] = useState("");
-    const [authError, setAuthError] = useState("");
-    const [links, setLinks] = useState<LinkItem[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState("");
-    const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set());
-    const [bulkAction, setBulkAction] = useState<"delete" | "addTags" | "removeTags" | null>(null);
-    const [bulkTagInput, setBulkTagInput] = useState("");
-    const [showAnalytics, setShowAnalytics] = useState(false);
-    const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
-    const [analyticsPeriod, setAnalyticsPeriod] = useState<"all" | "week" | "month" | "year">("all");
-    const [editingSlug, setEditingSlug] = useState<string | null>(null);
-    const [editValues, setEditValues] = useState<{
-        title: string;
-        description: string;
-        target: string;
-        tags: string[];
-    } | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
+async function responseError(response: Response) {
+    const payload = await response.json().catch(() => ({})) as { error?: string; details?: unknown };
+    return payload.error || `Request failed with status ${response.status}`;
+}
 
-    useEffect(() => {
-        const auth = sessionStorage.getItem("admin_authenticated");
-        if (auth === "true") {
-            setIsAuthenticated(true);
-            fetchLinks();
-        }
-    }, []);
+function TextField({label, value, onChange, required, type = "text", placeholder, disabled}: {
+    label: string;
+    value: string;
+    onChange: (value: string) => void;
+    required?: boolean;
+    type?: string;
+    placeholder?: string;
+    disabled?: boolean
+}) {
+    return <label className="grid gap-1 text-sm font-semibold"><span>{label}{required ? " *" : ""}</span><input
+        type={type} required={required} disabled={disabled} value={value}
+        onChange={(event) => onChange(event.target.value)} placeholder={placeholder}
+        className="rounded-lg border px-3 py-2.5 font-normal disabled:opacity-60"
+        style={{backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)"}}/></label>;
+}
 
-    function handleSelectAll() {
-        if (selectedLinks.size === filteredLinks.length) {
-            setSelectedLinks(new Set());
-        } else {
-            setSelectedLinks(new Set(filteredLinks.map(link => link.slug)));
-        }
-    }
+type ProjectEditorProps = {
+    initial: ProjectForm;
+    editing: boolean;
+    onCancel: () => void;
+    onSave: (form: ProjectForm) => Promise<void>;
+    busy: boolean
+};
 
-    function handleSelectLink(slug: string) {
-        const newSelected = new Set(selectedLinks);
-        if (newSelected.has(slug)) {
-            newSelected.delete(slug);
-        } else {
-            newSelected.add(slug);
-        }
-        setSelectedLinks(newSelected);
-    }
+function ProjectEditor(props: ProjectEditorProps) {
+    return <ProjectEditorState key={props.initial.slug || "new-project"} {...props} />;
+}
 
-    async function handleAuth(e: React.FormEvent) {
-        e.preventDefault();
-        setAuthError("");
-
-        try {
-            const response = await fetch("/api/auth", {
-                headers: {
-                    "x-admin-key": password,
-                },
-            });
-
-            if (response.ok) {
-                sessionStorage.setItem("admin_authenticated", "true");
-                sessionStorage.setItem("admin_key", password);
-                setIsAuthenticated(true);
-                fetchLinks();
-            } else {
-                setAuthError("Invalid admin key");
-            }
-        } catch {
-            setAuthError("Authentication failed");
-        }
-    }
-
-    async function fetchLinks() {
-        setLoading(true);
-        console.log("Fetching links...");
-        try {
-            const response = await fetch(`/api/links?_t=${Date.now()}`, {
-                headers: {
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-                cache: "no-store",
-            });
-            if (!response.ok) throw new Error("Failed to fetch links");
-            const data = await response.json();
-            console.log("Fetched links data:", data);
-
-            const transformedLinks = data.links.map((link: ApiLinkItem) => ({
-                slug: link.slug,
-                target: link.target,
-                clicks: link.clicks,
-                shortUrl: `${window.location.origin}/${link.slug}`,
-                title: link.metadata?.title || null,
-                description: link.metadata?.description || null,
-                tags: link.metadata?.tags || [],
-                createdAt: link.metadata?.createdAt || null,
-            }));
-
-            console.log("Setting links, count:", transformedLinks.length);
-            setLinks(transformedLinks);
-        } catch (err) {
-            console.error("Error fetching links:", err);
-            setError(err instanceof Error ? err.message : "Failed to load links");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    const fetchAnalytics = useCallback(async () => {
-        try {
-            const response = await fetch(`/api/stats?period=${analyticsPeriod}`, {
-                headers: {
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                setAnalytics(data);
-            }
-        } catch (err) {
-            console.error("Failed to fetch analytics:", err);
-        }
-    }, [analyticsPeriod]);
-
-    useEffect(() => {
-        if (showAnalytics && isAuthenticated) {
-            fetchAnalytics();
-        }
-    }, [showAnalytics, analyticsPeriod, isAuthenticated, fetchAnalytics]);
-
-    async function handleBulkDelete() {
-        if (selectedLinks.size === 0 || isDeleting) return;
-
-        if (!confirm(`Are you sure you want to delete ${selectedLinks.size} link${selectedLinks.size === 1 ? "" : "s"}?`)) return;
-
-        const slugs = Array.from(selectedLinks).join(",");
-        console.log("Deleting slugs:", slugs);
-        setIsDeleting(true);
-        try {
-            const response = await fetch(`/api/links?slugs=${slugs}`, {
-                method: "DELETE",
-                headers: {
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-            });
-
-            console.log("Delete response:", response.status);
-            if (response.ok) {
-                const result = await response.json();
-                console.log("Deleted:", result);
-                setSelectedLinks(new Set());
-                await fetchLinks();
-            } else {
-                const error = await response.text();
-                console.error("Delete failed:", error);
-                alert(`Failed to delete selected links: ${error}`);
-            }
-        } catch (err) {
-            console.error("Delete error:", err);
-            alert(`Error deleting links: ${err}`);
-        } finally {
-            setIsDeleting(false);
-        }
-    }
-
-    async function handleIndividualDelete(slug: string) {
-        if (isDeleting) return;
-
-        if (!confirm(`Are you sure you want to delete the link "/${slug}"?`)) return;
-
-        console.log("Deleting individual slug:", slug);
-        setIsDeleting(true);
-        try {
-            const response = await fetch(`/api/links?slug=${slug}`, {
-                method: "DELETE",
-                headers: {
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-            });
-
-            console.log("Delete response:", response.status);
-            if (response.ok) {
-                const result = await response.json();
-                console.log("Deleted:", result);
-                await fetchLinks();
-            } else {
-                const error = await response.text();
-                console.error("Delete failed:", error);
-                alert(`Failed to delete link: ${error}`);
-            }
-        } catch (err) {
-            console.error("Delete error:", err);
-            alert(`Error deleting link: ${err}`);
-        } finally {
-            setIsDeleting(false);
-        }
-    }
-
-    function handleStartEdit(link: LinkItem) {
-        setEditingSlug(link.slug);
-        setEditValues({
-            title: link.title || "",
-            description: link.description || "",
-            target: link.target,
-            tags: [...link.tags],
-        });
-    }
-
-    function handleCancelEdit() {
-        setEditingSlug(null);
-        setEditValues(null);
-    }
-
-    async function handleSaveEdit() {
-        if (!editingSlug || !editValues) return;
-
-        try {
-            const response = await fetch("/api/links", {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-                body: JSON.stringify({
-                    slug: editingSlug,
-                    target: editValues.target,
-                    title: editValues.title,
-                    description: editValues.description,
-                    tags: editValues.tags,
-                }),
-            });
-
-            if (response.ok) {
-                setEditingSlug(null);
-                setEditValues(null);
-                fetchLinks();
-            } else {
-                alert("Failed to update link");
-            }
-        } catch {
-            alert("Error updating link");
-        }
-    }
-
-    async function handleBulkAddTags() {
-        if (selectedLinks.size === 0 || !bulkTagInput.trim()) return;
-
-        const tags = bulkTagInput.split(",").map(t => t.trim()).filter(t => t);
-        try {
-            const response = await fetch("/api/tags", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-                body: JSON.stringify({
-                    slugs: Array.from(selectedLinks),
-                    tags,
-                }),
-            });
-
-            if (response.ok) {
-                setSelectedLinks(new Set());
-                setBulkAction(null);
-                setBulkTagInput("");
-                fetchLinks();
-            } else {
-                alert("Failed to add tags");
-            }
-        } catch {
-            alert("Error adding tags");
-        }
-    }
-
-    async function handleBulkRemoveTags() {
-        if (selectedLinks.size === 0 || !bulkTagInput.trim()) return;
-
-        const tags = bulkTagInput.split(",").map(t => t.trim()).filter(t => t);
-        try {
-            const response = await fetch("/api/tags", {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-                body: JSON.stringify({
-                    slugs: Array.from(selectedLinks),
-                    tags,
-                }),
-            });
-
-            if (response.ok) {
-                setSelectedLinks(new Set());
-                setBulkAction(null);
-                setBulkTagInput("");
-                fetchLinks();
-            } else {
-                alert("Failed to remove tags");
-            }
-        } catch {
-            alert("Error removing tags");
-        }
-    }
-
-    async function handleExport(format: "json" | "csv") {
-        try {
-            const response = await fetch(`/api/export?format=${format}`, {
-                headers: {
-                    "x-admin-key": sessionStorage.getItem("admin_key") || "",
-                },
-            });
-            if (response.ok) {
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `research-export-${new Date().toISOString().split('T')[0]}.${format}`;
-                document.body.appendChild(a);
-                a.click();
-                window.URL.revokeObjectURL(url);
-                document.body.removeChild(a);
-            } else {
-                alert("Failed to export data");
-            }
-        } catch {
-            alert("Error exporting data");
-        }
-    }
-
-    function handleLogout() {
-        sessionStorage.removeItem("admin_authenticated");
-        sessionStorage.removeItem("admin_key");
-        setIsAuthenticated(false);
-        setPassword("");
-        setLinks([]);
-    }
-
-    const filteredLinks = links.filter(
-        (link) =>
-            link.slug.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            link.target.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            link.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            link.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            link.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-
-    const totalClicks = links.reduce((sum, link) => sum + link.clicks, 0);
-
-    if (!isAuthenticated) {
-        return (
-            <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'var(--background)' }}>
-                <div className="max-w-md w-full">
-                    <div className="rounded-lg shadow-2xl p-8" style={{ backgroundColor: 'var(--card-bg)' }}>
-                        <div className="text-center mb-8">
-                            <h1 className="text-3xl font-bold mb-2" style={{ color: 'var(--text-color)' }}>
-                                Admin Dashboard
-                            </h1>
-                            <p style={{ color: 'var(--text-color)', opacity: 0.7 }}>
-                                Enter your admin key to continue
-                            </p>
-                        </div>
-
-                        <form onSubmit={handleAuth} className="space-y-6">
-                            <div>
-                                <label
-                                    htmlFor="password"
-                                    className="block text-sm font-medium mb-2"
-                                    style={{ color: 'var(--text-color)' }}
-                                >
-                                    Admin Key
-                                </label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent"
-                                    style={{
-                                        backgroundColor: 'var(--input-bg)',
-                                        borderColor: 'var(--input-border)',
-                                        color: 'var(--text-color)',
-                                        '--tw-ring-color': 'var(--primary-color)'
-                                    } as React.CSSProperties}
-                                    placeholder="Enter admin key"
-                                    required
-                                />
-                            </div>
-
-                            {authError && (
-                                <div className="rounded-lg p-3 border" style={{
-                                    backgroundColor: 'var(--error-bg)',
-                                    borderColor: 'var(--error-border)'
-                                }}>
-                                    <p className="text-sm" style={{ color: 'var(--error-text)' }}>
-                                        {authError}
-                                    </p>
-                                </div>
-                            )}
-
-                            <button
-                                type="submit"
-                                className="w-full text-white font-medium py-3 px-4 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2"
-                                style={{
-                                    backgroundColor: 'var(--button-primary)',
-                                    '--tw-ring-color': 'var(--primary-color)'
-                                } as React.CSSProperties}
-                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--button-primary-hover)'}
-                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--button-primary)'}
-                            >
-                                Sign In
-                            </button>
-                        </form>
-
-                        <div className="mt-6 text-center">
-                            <Link
-                                href="/"
-                                className="text-sm transition-colors"
-                                style={{ color: 'var(--text-color)', opacity: 0.7 }}
-                            >
-                                ← Back to home
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="min-h-screen" style={{ backgroundColor: 'var(--background-color)' }}>
-            <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
-                <header className="flex justify-between items-center mb-12">
-                    <div>
-                        <h1 className="text-4xl sm:text-5xl font-bold mb-2" style={{ color: 'var(--text-color)' }}>
-                            Admin Dashboard
-                        </h1>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <ThemeToggle />
-                        <button
-                            onClick={handleLogout}
-                            className="px-4 py-2 text-sm font-medium border rounded-lg transition-colors"
-                            style={{
-                                color: 'var(--text-color)',
-                                backgroundColor: 'var(--card-bg)',
-                                borderColor: 'var(--card-border)'
-                            }}
-                        >
-                            Logout
-                        </button>
-                    </div>
-                </header>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                                    Total Links
-                                </div>
-                                <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                                    {links.length}
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                                <svg
-                                    className="w-6 h-6 text-blue-600 dark:text-blue-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                                    Total Clicks
-                                </div>
-                                <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                                    {totalClicks.toLocaleString()}
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                                <svg
-                                    className="w-6 h-6 text-green-600 dark:text-green-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">
-                                    Avg. Clicks/Link
-                                </div>
-                                <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                                    {links.length > 0
-                                        ? Math.round(totalClicks / links.length)
-                                        : 0}
-                                </div>
-                            </div>
-                            <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
-                                <svg
-                                    className="w-6 h-6 text-purple-600 dark:text-purple-400"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                                    />
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex flex-wrap gap-4 mb-6">
-                    <button
-                        onClick={() => setShowAnalytics(!showAnalytics)}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                        {showAnalytics ? "Hide Analytics" : "Show Analytics"}
-                    </button>
-                    <button
-                        onClick={() => handleExport("json")}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                        Export JSON
-                    </button>
-                    <button
-                        onClick={() => handleExport("csv")}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
-                    >
-                        Export CSV
-                    </button>
-                </div>
-
-                {/* Analytics View */}
-                {showAnalytics && (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-8">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Analytics</h2>
-                            <select
-                                value={analyticsPeriod}
-                                onChange={(e) => setAnalyticsPeriod(e.target.value as "all" | "week" | "month" | "year")}
-                                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                            >
-                                <option value="all">All Time</option>
-                                <option value="week">Last Week</option>
-                                <option value="month">Last Month</option>
-                                <option value="year">Last Year</option>
-                            </select>
-                        </div>
-
-                        {analytics ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Overview</h3>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Total Links:</span>
-                                            <span className="font-medium">{analytics.totalLinks}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Total Clicks:</span>
-                                            <span className="font-medium">{analytics.totalClicks.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Avg Clicks/Link:</span>
-                                            <span className="font-medium">{analytics.avgClicksPerLink}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Unique Tags:</span>
-                                            <span className="font-medium">{analytics.uniqueTags}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Sources</h3>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">Manual:</span>
-                                            <span className="font-medium">{analytics.sources.manual}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600 dark:text-gray-400">ORCID:</span>
-                                            <span className="font-medium">{analytics.sources.orcid}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top Tags</h3>
-                                    <div className="space-y-2">
-                                        {analytics.topTags.slice(0, 5).map(([tag, count]) => (
-                                            <div key={tag} className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">{tag}:</span>
-                                                <span className="font-medium">{count}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center py-8">
-                                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 dark:border-white"></div>
-                                <p className="mt-2 text-gray-600 dark:text-gray-400">Loading analytics...</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Bulk Actions */}
-                {selectedLinks.size > 0 && (
-                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
-                        <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                                {selectedLinks.size} link{selectedLinks.size === 1 ? "" : "s"} selected
-                            </span>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setBulkAction("addTags")}
-                                    className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-                                >
-                                    Add Tags
-                                </button>
-                                <button
-                                    onClick={() => setBulkAction("removeTags")}
-                                    className="px-3 py-1 text-xs bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
-                                >
-                                    Remove Tags
-                                </button>
-                                <button
-                                    onClick={handleBulkDelete}
-                                    disabled={isDeleting}
-                                    className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {isDeleting ? "Deleting..." : "Delete"}
-                                </button>
-                            </div>
-                        </div>
-
-                        {bulkAction && (
-                            <div className="mt-4 flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder={bulkAction === "addTags" ? "tag1, tag2, tag3" : "tag1, tag2"}
-                                    value={bulkTagInput}
-                                    onChange={(e) => setBulkTagInput(e.target.value)}
-                                    className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                />
-                                <button
-                                    onClick={bulkAction === "addTags" ? handleBulkAddTags : handleBulkRemoveTags}
-                                    className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                                >
-                                    Apply
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setBulkAction(null);
-                                        setBulkTagInput("");
-                                    }}
-                                    className="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                <div className="mb-8">
-                    <input
-                        type="text"
-                        placeholder="Search links..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                </div>
-
-                {loading ? (
-                    <div className="text-center py-12">
-                        <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 dark:border-white"></div>
-                        <p className="mt-4 text-gray-600 dark:text-gray-400">
-                            Loading links...
-                        </p>
-                    </div>
-                ) : error ? (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-                        <p className="text-red-600 dark:text-red-400">{error}</p>
-                    </div>
-                ) : filteredLinks.length === 0 ? (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-12 text-center">
-                        <p className="text-gray-600 dark:text-gray-400">
-                            {searchQuery
-                                ? "No links found matching your search."
-                                : "No links yet."}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                <thead className="bg-gray-50 dark:bg-gray-900">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedLinks.size === filteredLinks.length && filteredLinks.length > 0}
-                                                onChange={handleSelectAll}
-                                                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                            />
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Short Link
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Title
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Description
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Tags
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Destination
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Clicks
-                                        </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                            Actions
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                    {filteredLinks.map((link) => (
-                                        <tr
-                                            key={link.slug}
-                                            className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-                                        >
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedLinks.has(link.slug)}
-                                                    onChange={() => handleSelectLink(link.slug)}
-                                                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 dark:focus:ring-blue-400"
-                                                />
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <Link
-                                                    href={link.shortUrl}
-                                                    prefetch={false}
-                                                    className="text-blue-600 dark:text-blue-400 hover:underline font-mono font-medium"
-                                                >
-                                                    /{link.slug}
-                                                </Link>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {editingSlug === link.slug ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editValues?.title || ""}
-                                                        onChange={(e) => setEditValues(prev => prev ? { ...prev, title: e.target.value } : null)}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                        placeholder="Enter title"
-                                                    />
-                                                ) : (
-                                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                                        {link.title || <span className="text-gray-400 italic">No title</span>}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 max-w-xs">
-                                                {editingSlug === link.slug ? (
-                                                    <textarea
-                                                        value={editValues?.description || ""}
-                                                        onChange={(e) => setEditValues(prev => prev ? { ...prev, description: e.target.value } : null)}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"
-                                                        placeholder="Enter description"
-                                                        rows={2}
-                                                    />
-                                                ) : (
-                                                    <div className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                                                        {link.description || <span className="italic">No description</span>}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {editingSlug === link.slug ? (
-                                                    <input
-                                                        type="text"
-                                                        value={editValues?.tags.join(", ") || ""}
-                                                        onChange={(e) => setEditValues(prev => prev ? { ...prev, tags: e.target.value.split(",").map(t => t.trim()).filter(t => t) } : null)}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                        placeholder="tag1, tag2, tag3"
-                                                    />
-                                                ) : (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        {link.tags.length > 0 ? (
-                                                            link.tags.map((tag) => (
-                                                                <span
-                                                                    key={tag}
-                                                                    className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200"
-                                                                >
-                                                                    {tag}
-                                                                </span>
-                                                            ))
-                                                        ) : (
-                                                            <span className="text-sm text-gray-400 italic">No tags</span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {editingSlug === link.slug ? (
-                                                    <input
-                                                        type="url"
-                                                        value={editValues?.target || ""}
-                                                        onChange={(e) => setEditValues(prev => prev ? { ...prev, target: e.target.value } : null)}
-                                                        className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                                                        placeholder="https://example.com"
-                                                    />
-                                                ) : (
-                                                    <a
-                                                        href={link.target}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 hover:underline max-w-md truncate block text-sm"
-                                                    >
-                                                        {link.target}
-                                                    </a>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
-                                                    {link.clicks.toLocaleString()}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="flex gap-2">
-                                                    {editingSlug === link.slug ? (
-                                                        <>
-                                                            <button
-                                                                onClick={handleSaveEdit}
-                                                                className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
-                                                            >
-                                                                Save
-                                                            </button>
-                                                            <button
-                                                                onClick={handleCancelEdit}
-                                                                className="px-3 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleStartEdit(link)}
-                                                                className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                                                            >
-                                                                Edit
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleIndividualDelete(link.slug)}
-                                                                disabled={isDeleting}
-                                                                className="px-3 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            >
-                                                                {isDeleting ? "Deleting..." : "Delete"}
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                )}
-
-                <footer className="mt-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <p>
-                        {filteredLinks.length > 0 &&
-                            `Showing ${filteredLinks.length} of ${links.length} link${links.length === 1 ? "" : "s"
-                            }`}
-                    </p>
-                </footer>
-            </div>
+function ProjectEditorState({initial, editing, onCancel, onSave, busy}: ProjectEditorProps) {
+    const [form, setForm] = useState(initial);
+    const field = <K extends keyof ProjectForm>(key: K, value: ProjectForm[K]) => setForm((current) => ({
+        ...current,
+        [key]: value
+    }));
+    return <form onSubmit={(event) => {
+        event.preventDefault();
+        void onSave(form);
+    }} className="grid gap-4 rounded-xl border p-5"
+                 style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
+        <div><h2 className="text-xl font-bold">{editing ? "Edit project" : "Add project"}</h2><p
+            className="text-sm opacity-65">Titles are never fetched from external URLs; an empty title uses the
+            slug.</p></div>
+        <div className="grid gap-4 md:grid-cols-2"><TextField label="Slug" value={form.slug}
+                                                              onChange={(value) => field("slug", value)} required
+                                                              disabled={editing} placeholder="project-slug"/><TextField
+            label="Target URL" value={form.target} onChange={(value) => field("target", value)} required type="url"
+            placeholder="https://…"/></div>
+        <TextField label="Title" value={form.title} onChange={(value) => field("title", value)}
+                   placeholder="Optional display title"/>
+        <label className="grid gap-1 text-sm font-semibold"><span>Description</span><textarea rows={4}
+                                                                                              value={form.description}
+                                                                                              onChange={(event) => field("description", event.target.value)}
+                                                                                              className="rounded-lg border px-3 py-2.5 font-normal"
+                                                                                              style={{
+                                                                                                  backgroundColor: "var(--input-bg)",
+                                                                                                  borderColor: "var(--input-border)"
+                                                                                              }}/></label>
+        <TextField label="Tags" value={form.tags} onChange={(value) => field("tags", value)}
+                   placeholder="bioinformatics, software"/>
+        <div className="grid gap-4 md:grid-cols-2"><TextField label="Start date" value={form.startDate}
+                                                              onChange={(value) => field("startDate", value)}
+                                                              placeholder="YYYY, YYYY-MM, or YYYY-MM-DD"/><TextField
+            label="End date" value={form.endDate} onChange={(value) => field("endDate", value)}
+            placeholder="YYYY, YYYY-MM, or YYYY-MM-DD"/></div>
+        <div className="grid gap-4 md:grid-cols-2"><TextField label="Repository URL" value={form.githubRepo}
+                                                              onChange={(value) => field("githubRepo", value)}
+                                                              type="url" placeholder="https://github.com/…"/><TextField
+            label="Photo set ID" value={form.photoSetId} onChange={(value) => field("photoSetId", value)}
+            placeholder="Defaults to the project slug"/></div>
+        <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.permanent}
+                                                                                onChange={(event) => field("permanent", event.target.checked)}/>Permanent
+            redirect (308)</label>
+        <p className="text-xs opacity-60">Source: {form.slug.toLowerCase().startsWith("orcid-") ? "ORCID" : "Manual"}</p>
+        <div className="flex justify-end gap-2">
+            <button type="button" onClick={onCancel} className="rounded-lg border px-4 py-2 font-semibold"
+                    style={{borderColor: "var(--card-border)"}}>Cancel
+            </button>
+            <button disabled={busy} type="submit" className="rounded-lg px-4 py-2 font-semibold disabled:opacity-50"
+                    style={{
+                        backgroundColor: "var(--button-primary)",
+                        color: "var(--on-primary)"
+                    }}>{busy ? "Saving…" : "Save project"}</button>
         </div>
-    );
+    </form>;
+}
+
+type CollectionEditorProps = {
+    initial: CollectionForm;
+    editing: boolean;
+    projects: ProjectRecord[];
+    onCancel: () => void;
+    onSave: (form: CollectionForm) => Promise<void>;
+    busy: boolean
+};
+
+function CollectionEditor(props: CollectionEditorProps) {
+    return <CollectionEditorState key={props.initial.id || "new-collection"} {...props} />;
+}
+
+function CollectionEditorState({initial, editing, projects, onCancel, onSave, busy}: CollectionEditorProps) {
+    const [form, setForm] = useState(initial);
+    const move = (index: number, direction: -1 | 1) => setForm((current) => {
+        const next = [...current.projects];
+        const target = index + direction;
+        if (target < 0 || target >= next.length) return current;
+        [next[index], next[target]] = [next[target], next[index]];
+        return {...current, projects: next};
+    });
+    const bySlug = new Map(projects.map((project) => [project.slug, project]));
+    const orderedProjects = [
+        ...form.projects.map((slug) => bySlug.get(slug)).filter((project): project is ProjectRecord => Boolean(project)),
+        ...projects.filter((project) => !form.projects.includes(project.slug)),
+    ];
+    return <form onSubmit={(event) => {
+        event.preventDefault();
+        void onSave(form);
+    }} className="grid gap-4 rounded-xl border p-5"
+                 style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
+        <div><h2 className="text-xl font-bold">{editing ? "Edit collection" : "Add collection"}</h2><p
+            className="text-sm opacity-65">Choose existing projects and arrange their public order.</p></div>
+        <div className="grid gap-4 md:grid-cols-2"><TextField label="Collection ID" value={form.id}
+                                                              onChange={(id) => setForm((current) => ({
+                                                                  ...current,
+                                                                  id
+                                                              }))} required disabled={editing}/><TextField label="Name"
+                                                                                                           value={form.name}
+                                                                                                           onChange={(name) => setForm((current) => ({
+                                                                                                               ...current,
+                                                                                                               name
+                                                                                                           }))}
+                                                                                                           required/>
+        </div>
+        <label className="grid gap-1 text-sm font-semibold"><span>Description</span><textarea rows={3}
+                                                                                              value={form.description}
+                                                                                              onChange={(event) => setForm((current) => ({
+                                                                                                  ...current,
+                                                                                                  description: event.target.value
+                                                                                              }))}
+                                                                                              className="rounded-lg border px-3 py-2.5 font-normal"
+                                                                                              style={{
+                                                                                                  backgroundColor: "var(--input-bg)",
+                                                                                                  borderColor: "var(--input-border)"
+                                                                                              }}/></label>
+        <TextField label="Collection tags" value={form.tags}
+                   onChange={(tags) => setForm((current) => ({...current, tags}))} placeholder="group, topic"/>
+        <fieldset className="grid gap-2">
+            <legend className="text-sm font-semibold">Projects</legend>
+            {orderedProjects.map((project) => {
+                const selected = form.projects.includes(project.slug);
+                return <label key={project.slug} className="flex items-center gap-3 rounded-lg border px-3 py-2"
+                              style={{borderColor: "var(--card-border)"}}><input type="checkbox" checked={selected}
+                                                                                 onChange={() => setForm((current) => ({
+                                                                                     ...current,
+                                                                                     projects: selected ? current.projects.filter((slug) => slug !== project.slug) : [...current.projects, project.slug]
+                                                                                 }))}/><span
+                    className="min-w-0 flex-1 truncate">{project.metadata.title}</span>{selected ?
+                    <span className="flex gap-1"><button type="button" aria-label={`Move ${project.metadata.title} up`}
+                                                         onClick={() => move(form.projects.indexOf(project.slug), -1)}
+                                                         className="rounded border px-2">↑</button><button type="button"
+                                                                                                           aria-label={`Move ${project.metadata.title} down`}
+                                                                                                           onClick={() => move(form.projects.indexOf(project.slug), 1)}
+                                                                                                           className="rounded border px-2">↓</button></span> : null}
+                </label>;
+            })}</fieldset>
+        <div className="flex justify-end gap-2">
+            <button type="button" onClick={onCancel} className="rounded-lg border px-4 py-2 font-semibold"
+                    style={{borderColor: "var(--card-border)"}}>Cancel
+            </button>
+            <button disabled={busy} type="submit" className="rounded-lg px-4 py-2 font-semibold disabled:opacity-50"
+                    style={{
+                        backgroundColor: "var(--button-primary)",
+                        color: "var(--on-primary)"
+                    }}>{busy ? "Saving…" : "Save collection"}</button>
+        </div>
+    </form>;
+}
+
+export default function AdminPage() {
+    const [adminKey, setAdminKey] = useState("");
+    const [authenticated, setAuthenticated] = useState(false);
+    const [checkingAuth, setCheckingAuth] = useState(true);
+    const [tab, setTab] = useState<Tab>("projects");
+    const [projects, setProjects] = useState<ProjectRecord[]>([]);
+    const [projectChoices, setProjectChoices] = useState<ProjectRecord[]>([]);
+    const [collections, setCollections] = useState<CollectionRecord[]>([]);
+    const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+    const [analyticsLoading, setAnalyticsLoading] = useState(false);
+    const [offset, setOffset] = useState(0);
+    const [total, setTotal] = useState(0);
+    const [projectForm, setProjectForm] = useState<ProjectForm | null>(null);
+    const [collectionForm, setCollectionForm] = useState<CollectionForm | null>(null);
+    const [busy, setBusy] = useState<string | null>(null);
+    const [error, setError] = useState("");
+    const [notice, setNotice] = useState("");
+    const pageSize = 20;
+
+    const logout = useCallback(() => {
+        removeAdminKey();
+        setAdminKey("");
+        setAuthenticated(false);
+        setProjects([]);
+        setCollections([]);
+        setAnalytics(null);
+    }, []);
+    const request = useCallback(async (path: string, init?: RequestInit) => {
+        const response = await fetch(path, {
+            ...init,
+            headers: {"Content-Type": "application/json", "x-admin-key": adminKey, ...(init?.headers || {})},
+            cache: "no-store"
+        });
+        if (response.status === 401) logout();
+        if (!response.ok) throw new Error(await responseError(response));
+        return response;
+    }, [adminKey, logout]);
+    const loadProjects = useCallback(async (nextOffset = 0) => {
+        const response = await request(`/api/links?limit=${pageSize}&offset=${nextOffset}`);
+        const payload = await response.json() as { links: ProjectRecord[]; pagination: { total: number } };
+        setProjects(payload.links);
+        setTotal(payload.pagination.total);
+        setOffset(nextOffset);
+    }, [request]);
+    const loadProjectChoices = useCallback(async () => {
+        const collected: ProjectRecord[] = [];
+        let nextOffset = 0;
+        let hasMore = true;
+        while (hasMore) {
+            const response = await request(`/api/links?limit=200&offset=${nextOffset}`);
+            const payload = await response.json() as { links: ProjectRecord[]; pagination: { hasMore: boolean } };
+            collected.push(...payload.links);
+            hasMore = payload.pagination.hasMore;
+            nextOffset += 200;
+        }
+        setProjectChoices(collected);
+    }, [request]);
+    const loadCollections = useCallback(async () => {
+        const response = await request("/api/collections");
+        setCollections(((await response.json()) as { collections: CollectionRecord[] }).collections);
+    }, [request]);
+
+    useEffect(() => {
+        const stored = readAdminKey();
+        if (!stored) {
+            const timeout = window.setTimeout(() => setCheckingAuth(false), 0);
+            return () => window.clearTimeout(timeout);
+        }
+        const controller = new AbortController();
+        fetch("/api/auth", {
+            headers: {"x-admin-key": stored},
+            cache: "no-store",
+            signal: controller.signal
+        }).then((response) => {
+            if (!response.ok) throw new Error("Session expired");
+            setAdminKey(stored);
+            setAuthenticated(true);
+        }).catch((caught) => {
+            if (!(caught instanceof DOMException && caught.name === "AbortError")) removeAdminKey();
+        }).finally(() => {
+            if (!controller.signal.aborted) setCheckingAuth(false);
+        });
+        return () => controller.abort();
+    }, []);
+    useEffect(() => {
+        if (!authenticated || !adminKey) return;
+        const timeout = window.setTimeout(() => {
+            Promise.all([loadProjects(0), loadProjectChoices(), loadCollections()]).catch((caught: Error) => setError(caught.message));
+        }, 0);
+        return () => window.clearTimeout(timeout);
+    }, [adminKey, authenticated, loadCollections, loadProjectChoices, loadProjects]);
+
+    const allProjectChoices = useMemo(() => {
+        const map = new Map(projectChoices.map((project) => [project.slug, project]));
+        return [...map.values()].toSorted((a, b) => a.metadata.title.localeCompare(b.metadata.title));
+    }, [projectChoices]);
+
+    const login = async (event: FormEvent) => {
+        event.preventDefault();
+        setError("");
+        setBusy("login");
+        try {
+            const response = await fetch("/api/auth", {headers: {"x-admin-key": adminKey}, cache: "no-store"});
+            if (!response.ok) {
+                setError(await responseError(response));
+                return;
+            }
+            storeAdminKey(adminKey);
+            setAuthenticated(true);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Unable to sign in");
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const saveProject = async (form: ProjectForm) => {
+        const editing = Boolean(projects.find((project) => project.slug === form.slug));
+        setBusy(`project:${form.slug || "new"}`);
+        setError("");
+        setNotice("");
+        try {
+            await request("/api/links", {
+                method: editing ? "PUT" : "POST",
+                body: JSON.stringify({...form, tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean)})
+            });
+            setProjectForm(null);
+            setNotice(editing ? "Project updated." : "Project created.");
+            await Promise.all([loadProjects(editing ? offset : 0), loadProjectChoices(), loadCollections()]);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Unable to save project");
+        } finally {
+            setBusy(null);
+        }
+    };
+    const saveCollection = async (form: CollectionForm) => {
+        const editing = collections.some((collection) => collection.id === form.id);
+        setBusy(`collection:${form.id || "new"}`);
+        setError("");
+        setNotice("");
+        try {
+            await request("/api/collections", {
+                method: editing ? "PUT" : "POST",
+                body: JSON.stringify({...form, tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean)})
+            });
+            setCollectionForm(null);
+            setNotice(editing ? "Collection updated." : "Collection created.");
+            await loadCollections();
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Unable to save collection");
+        } finally {
+            setBusy(null);
+        }
+    };
+    const remove = async (kind: "project" | "collection", id: string) => {
+        if (!window.confirm(`Delete ${kind} “${id}”?`)) return;
+        setBusy(`${kind}:${id}`);
+        setError("");
+        setNotice("");
+        try {
+            await request(kind === "project" ? `/api/links?slug=${encodeURIComponent(id)}` : `/api/collections?id=${encodeURIComponent(id)}`, {method: "DELETE"});
+            setNotice(`${kind === "project" ? "Project" : "Collection"} deleted.`);
+            await Promise.all([loadProjects(Math.max(0, offset - (projects.length === 1 ? pageSize : 0))), loadProjectChoices(), loadCollections()]);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : `Unable to delete ${kind}`);
+        } finally {
+            setBusy(null);
+        }
+    };
+    const loadAnalytics = async () => {
+        setAnalyticsLoading(true);
+        setError("");
+        try {
+            setAnalytics(await (await request("/api/stats")).json() as AnalyticsSummary);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "Unable to load analytics");
+        } finally {
+            setAnalyticsLoading(false);
+        }
+    };
+
+    if (checkingAuth) return <main className="grid min-h-screen place-items-center"><p role="status">Checking your
+        session…</p></main>;
+    if (!authenticated) return <main className="grid min-h-screen place-items-center px-4"
+                                     style={{backgroundColor: "var(--background-color)"}}>
+        <form onSubmit={login} className="grid w-full max-w-sm gap-4 rounded-xl border p-6 shadow-lg"
+              style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
+            <div><h1 className="text-2xl font-bold">Research admin</h1><p className="text-sm opacity-65">Use the
+                deployment’s shared administrator key.</p></div>
+            <TextField label="Admin key" value={adminKey} onChange={setAdminKey} required type="password"/>{error ?
+            <p role="alert" className="rounded-lg border p-3 text-sm" style={{
+                color: "var(--error-text)",
+                backgroundColor: "var(--error-bg)",
+                borderColor: "var(--error-border)"
+            }}>{error}</p> : null}
+            <button disabled={busy === "login"} className="rounded-lg px-4 py-2.5 font-bold disabled:opacity-50"
+                    style={{
+                        backgroundColor: "var(--button-primary)",
+                        color: "var(--on-primary)"
+                    }}>{busy === "login" ? "Signing in…" : "Sign in"}</button>
+        </form>
+    </main>;
+
+    return <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8"
+                 style={{backgroundColor: "var(--background-color)"}}>
+        <div className="mx-auto max-w-6xl space-y-6">
+            <header className="flex flex-wrap items-center justify-between gap-4">
+                <div><h1 className="text-3xl font-bold">Research admin</h1><p className="opacity-65">Manage the public
+                    directory and all-time analytics.</p></div>
+                <button onClick={logout} className="rounded-lg border px-4 py-2 font-semibold"
+                        style={{borderColor: "var(--card-border)"}}>Sign out
+                </button>
+            </header>
+            <nav aria-label="Admin sections" className="flex gap-2 border-b"
+                 style={{borderColor: "var(--card-border)"}}>{(["projects", "collections", "analytics"] as Tab[]).map((value) =>
+                <button key={value} onClick={() => {
+                    setTab(value);
+                    setProjectForm(null);
+                    setCollectionForm(null);
+                    if (value === "analytics" && !analytics) void loadAnalytics();
+                }} aria-current={tab === value ? "page" : undefined}
+                        className="border-b-2 px-4 py-3 font-semibold capitalize" style={{
+                    borderColor: tab === value ? "var(--primary-color)" : "transparent",
+                    color: tab === value ? "var(--primary-color)" : "var(--text-color)"
+                }}>{value}</button>)}</nav>
+            {error ? <div role="alert" className="rounded-lg border p-3" style={{
+                color: "var(--error-text)",
+                backgroundColor: "var(--error-bg)",
+                borderColor: "var(--error-border)"
+            }}>{error}
+                <button onClick={() => setError("")} className="ml-3 underline">Dismiss</button>
+            </div> : null}
+            {notice ? <div role="status" className="rounded-lg border p-3" style={{
+                backgroundColor: "var(--primary-soft)",
+                borderColor: "var(--primary-color)"
+            }}>{notice}</div> : null}
+
+            {tab === "projects" ? <section className="space-y-4">
+                {projectForm ? <ProjectEditor initial={projectForm}
+                                              editing={projects.some((project) => project.slug === projectForm.slug)}
+                                              onCancel={() => setProjectForm(null)} onSave={saveProject}
+                                              busy={busy?.startsWith("project:") || false}/> :
+                    <button onClick={() => setProjectForm({...EMPTY_PROJECT})}
+                            className="rounded-lg px-4 py-2 font-bold"
+                            style={{backgroundColor: "var(--button-primary)", color: "var(--on-primary)"}}>Add
+                        project</button>}
+                <div className="overflow-x-auto rounded-xl border"
+                     style={{borderColor: "var(--card-border)", backgroundColor: "var(--card-bg)"}}>
+                    <table className="w-full min-w-180 text-left">
+                        <thead className="border-b text-sm" style={{borderColor: "var(--card-border)"}}>
+                        <tr>
+                            <th className="p-4">Project</th>
+                            <th className="p-4">Source</th>
+                            <th className="p-4">Clicks</th>
+                            <th className="p-4">Tags</th>
+                            <th className="p-4 text-right">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>{projects.map((project) => <tr key={project.slug} className="border-b last:border-0"
+                                                              style={{borderColor: "var(--card-border)"}}>
+                            <td className="p-4"><p className="font-bold">{project.metadata.title}</p><p
+                                className="font-mono text-xs opacity-60">/{project.slug}</p></td>
+                            <td className="p-4 capitalize">{project.source}</td>
+                            <td className="p-4">{project.clicks}</td>
+                            <td className="p-4 text-sm">{project.metadata.tags.join(", ") || "—"}</td>
+                            <td className="p-4 text-right">
+                                <button onClick={() => setProjectForm({
+                                    slug: project.slug,
+                                    target: project.target,
+                                    title: project.metadata.title,
+                                    description: project.metadata.description || "",
+                                    tags: project.metadata.tags.join(", "),
+                                    permanent: project.metadata.permanent,
+                                    startDate: project.metadata.startDate || "",
+                                    endDate: project.metadata.endDate || "",
+                                    githubRepo: project.metadata.githubRepo || "",
+                                    photoSetId: project.metadata.photoSetId || ""
+                                })} className="mr-3 font-semibold underline">Edit
+                                </button>
+                                <button disabled={busy === `project:${project.slug}`}
+                                        onClick={() => void remove("project", project.slug)}
+                                        className="font-semibold underline disabled:opacity-50"
+                                        style={{color: "var(--error-text)"}}>{busy === `project:${project.slug}` ? "Deleting…" : "Delete"}</button>
+                            </td>
+                        </tr>)}</tbody>
+                    </table>
+                    {!projects.length ? <p className="p-8 text-center opacity-65">No projects on this page.</p> : null}
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                    <span>{total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : "0 projects"}</span><span
+                    className="flex gap-2"><button disabled={offset === 0}
+                                                   onClick={() => void loadProjects(Math.max(0, offset - pageSize))}
+                                                   className="rounded border px-3 py-2 disabled:opacity-40">Previous</button><button
+                    disabled={offset + pageSize >= total} onClick={() => void loadProjects(offset + pageSize)}
+                    className="rounded border px-3 py-2 disabled:opacity-40">Next</button></span></div>
+            </section> : null}
+
+            {tab === "collections" ? <section className="space-y-4">{collectionForm ?
+                <CollectionEditor initial={collectionForm}
+                                  editing={collections.some((collection) => collection.id === collectionForm.id)}
+                                  projects={allProjectChoices} onCancel={() => setCollectionForm(null)}
+                                  onSave={saveCollection} busy={busy?.startsWith("collection:") || false}/> :
+                <button onClick={() => setCollectionForm({...EMPTY_COLLECTION})}
+                        className="rounded-lg px-4 py-2 font-bold"
+                        style={{backgroundColor: "var(--button-primary)", color: "var(--on-primary)"}}>Add
+                    collection</button>}
+                <div className="grid gap-4">{collections.map((collection) => <article key={collection.id}
+                                                                                      className="rounded-xl border p-5"
+                                                                                      style={{
+                                                                                          backgroundColor: "var(--card-bg)",
+                                                                                          borderColor: "var(--card-border)"
+                                                                                      }}>
+                    <div className="flex items-start justify-between gap-4">
+                        <div><h2 className="text-xl font-bold">{collection.name}</h2><p
+                            className="opacity-70">{collection.description}</p><p
+                            className="mt-2 text-sm">{collection.projects.length} projects
+                            · {collection.tags.join(", ") || "no collection tags"}</p></div>
+                        <div className="shrink-0">
+                            <button onClick={() => setCollectionForm({
+                                id: collection.id,
+                                name: collection.name,
+                                description: collection.description,
+                                tags: collection.tags.join(", "),
+                                projects: collection.projects
+                            })} className="mr-3 font-semibold underline">Edit
+                            </button>
+                            <button disabled={busy === `collection:${collection.id}`}
+                                    onClick={() => void remove("collection", collection.id)}
+                                    className="font-semibold underline disabled:opacity-50"
+                                    style={{color: "var(--error-text)"}}>Delete
+                            </button>
+                        </div>
+                    </div>
+                </article>)}{!collections.length ? <p className="rounded-xl border p-8 text-center opacity-65"
+                                                      style={{borderColor: "var(--card-border)"}}>No collections
+                    yet.</p> : null}</div>
+            </section> : null}
+
+            {tab === "analytics" ? <section className="space-y-5">
+                <div className="flex items-center justify-between">
+                    <div><h2 className="text-xl font-bold">All-time analytics</h2><p className="text-sm opacity-65">Raw
+                        successful redirect counts since each project was created.</p></div>
+                    <button onClick={() => void loadAnalytics()}
+                            className="rounded-lg border px-4 py-2 font-semibold">Refresh
+                    </button>
+                </div>
+                {analyticsLoading ? <p role="status">Loading analytics…</p> : analytics ? <>
+                    <div
+                        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[["Projects", analytics.totalLinks], ["Clicks", analytics.totalClicks], ["Average clicks", analytics.averageClicks], ["Unique tags", analytics.uniqueTags]].map(([label, value]) =>
+                        <div key={String(label)} className="rounded-xl border p-5"
+                             style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}><p
+                            className="text-sm opacity-65">{label}</p><p className="text-3xl font-bold">{value}</p>
+                        </div>)}</div>
+                    <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-xl border p-5"
+                             style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}><h3
+                            className="mb-3 font-bold">Top projects</h3>
+                            <ol className="space-y-2">{analytics.topProjects.map((project) => <li key={project.slug}
+                                                                                                  className="flex justify-between gap-3">
+                                <span className="truncate">{project.title}</span><strong>{project.clicks}</strong>
+                            </li>)}</ol>
+                        </div>
+                        <div className="rounded-xl border p-5"
+                             style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}><h3
+                            className="mb-3 font-bold">Top tags</h3>
+                            <ol className="space-y-2">{analytics.topTags.map((tag) => <li key={tag.tag}
+                                                                                          className="flex justify-between gap-3">
+                                <span>{tag.tag}</span><strong>{tag.projects}</strong></li>)}</ol>
+                        </div>
+                    </div>
+                </> : <p>No analytics available.</p>}</section> : null}
+        </div>
+    </main>;
 }

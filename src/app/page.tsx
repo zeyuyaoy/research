@@ -1,132 +1,47 @@
 import SearchableProjects from "@/components/SearchableProjects";
-import { getOrcidWorks } from "@/lib/orcid";
-import { getRedisClient } from "@/lib/redis";
-import { getPhotoSet } from "@/lib/conferenceSlides";
-import type { PhotoSet } from "@/lib/conferenceSlides";
+import {getPhotoSet, type PhotoSet} from "@/lib/conferenceSlides";
+import {getDirectorySnapshot} from "@/lib/directory";
+import {type CollectionRecord, type PublicProject, toPublicProject} from "@/lib/models";
+import {getOrcidWorks} from "@/lib/orcid";
+import {getRedisUrl} from "@/lib/redis";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
-interface LinkItem {
-  slug: string;
-  target: string;
-  shortUrl: string;
-  title: string | null;
-  description: string | null;
-  tags: string[];
-  source: "manual" | "orcid";
-  clicks: number;
-  createdAt?: string | null;
-  startDate?: string | null;
-  endDate?: string | null;
-  githubRepo?: string | null;
-  photoSet?: PhotoSet;
-}
-
-async function getLinks(): Promise<LinkItem[]> {
-  if (!process.env.RESEARCH_REDIS_URL && !process.env.REDIS_URL) {
-    console.log("Redis URL not configured, returning empty links");
-    return [];
-  }
-
-  try {
-    const redis = await getRedisClient();
-    const keys = await redis.keys("link:*");
-
-    const links = await Promise.all(
-      keys.map(async (key) => {
-        const slug = key.replace("link:", "");
-        const target = await redis.get(key);
-        const meta = await redis.hGetAll(`meta:${slug}`);
-
-        const link: any = {
-          slug,
-          target: target || "",
-          shortUrl: `/${slug}`,
-          title: meta.title || null,
-          description: meta.description || null,
-          tags: meta.tags ? meta.tags.split(",") : [],
-          source: slug.startsWith("orcid-") ? ("orcid" as const) : ("manual" as const),
-          clicks: Number((await redis.get(`count:${slug}`)) || 0),
-          createdAt: meta.createdAt || null,
-          startDate: meta.startDate || null,
-          endDate: meta.endDate || null,
-          githubRepo: meta.githubRepo || null,
-        };
-
-        const ps: PhotoSet | undefined = getPhotoSet(slug);
-        if (ps) link.photoSet = ps;
-
-        return link;
-      })
-    );
-
-    const manualLinks = links.filter((link: any) => link.source === "manual");
-
-    return manualLinks as LinkItem[];
-  } catch (error) {
-    console.error("Error fetching links:", error);
-    return [];
-  }
-}
-
-interface CollectionItem {
-  id: string;
-  name: string;
-  description: string;
-  projects: string[];
-  tags?: string[];
-  createdAt: string | null;
-  photoSet?: PhotoSet;
-}
-
-async function getCollections(): Promise<CollectionItem[]> {
-  if (!process.env.RESEARCH_REDIS_URL && !process.env.REDIS_URL) {
-    return [];
-  }
-
-  try {
-    const redis = await getRedisClient();
-    const keys = await redis.keys("collection:*");
-
-    const collections = await Promise.all(
-      keys.map(async (key) => {
-        const id = key.replace("collection:", "");
-        const data = await redis.hGetAll(key);
-        const coll: any = {
-          id,
-          name: data.name || "",
-          description: data.description || "",
-          projects: data.projects ? data.projects.split(",").filter(Boolean) : [],
-          tags: data.tags ? data.tags.split(",").filter(Boolean) : [],
-          createdAt: data.createdAt || null,
-        };
-
-        const ps: PhotoSet | undefined = getPhotoSet(id);
-        if (ps) coll.photoSet = ps;
-
-        return coll;
-      })
-    );
-
-    return collections as CollectionItem[];
-  } catch (error) {
-    console.error("Error fetching collections:", error);
-    return [];
-  }
-}
+export type ProjectView = PublicProject & { photoSet?: PhotoSet };
+export type CollectionView = CollectionRecord & { photoSet?: PhotoSet };
 
 export default async function Home() {
-  const manualLinks = await getLinks();
-  const collections = await getCollections();
-  const orcidWorks = await getOrcidWorks(process.env.ORCID_ID || "");
-  const allLinks = [...manualLinks, ...orcidWorks];
+    let projects: ProjectView[] = [];
+    let collections: CollectionView[] = [];
+    let availability: "ready" | "unconfigured" | "unavailable" = getRedisUrl() ? "ready" : "unconfigured";
 
-  return (
-    <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--background-color)' }}>
-      <div className="max-w-4xl w-full mx-auto px-4 py-16 sm:px-6 lg:px-8">
-        <SearchableProjects initialLinks={allLinks} initialCollections={collections} />
-      </div>
-    </div>
-  );
+    if (availability === "ready") {
+        try {
+            const [{projects: storedProjects, collections: storedCollections}, orcidProjects] = await Promise.all([
+                getDirectorySnapshot({fresh: true}),
+                getOrcidWorks(process.env.ORCID_ID || ""),
+            ]);
+            const bySlug = new Map([...storedProjects, ...orcidProjects].map((project) => [project.slug, project]));
+            projects = [...bySlug.values()].map((project) => ({
+                ...toPublicProject(project),
+                photoSet: getPhotoSet(project.metadata.photoSetId || project.slug)
+            }));
+            collections = storedCollections.map((collection) => ({
+                ...collection,
+                photoSet: getPhotoSet(collection.id)
+            }));
+        } catch (error) {
+            console.error("Unable to load the research directory:", error instanceof Error ? error.message : "unknown error");
+            availability = "unavailable";
+        }
+    }
+
+    return (
+        <main className="min-h-screen flex justify-center" style={{backgroundColor: "var(--background-color)"}}>
+            <div className="max-w-4xl w-full mx-auto px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
+                <SearchableProjects initialLinks={projects} initialCollections={collections}
+                                    availability={availability}/>
+            </div>
+        </main>
+    );
 }

@@ -1,81 +1,75 @@
-Hey! This is a searchable repository for my research projects built with Next.js, Redis, and React. However, you can also use it as a template for your own research site.
+Hey! This is a searchable repository for my research projects built with Next.js, Redis, and React. However, you can
+also use it as a template for your own research site.
 
-This app allows you to organize research projects with tags, descriptions, and links, making them easily discoverable through a clean search interface.
+This app allows you to organize research projects with tags, descriptions, and links, making them easily discoverable
+through a clean search interface.
 
 ### Features
 
-- Real-time search across project titles, descriptions, and tags
-- Redis-powered data storage for efficient retrieval
-- Light/dark mode support
-- Fast server-side rendering with Next.js
-- Responsive design for all devices
-- URL shortening for research links
+- Search, source filters, tags, research-date sorting, collections, light/dark themes, and responsive layouts
+- Accessible project sharing, collection disclosures, and conference carousels
+- Redis-backed project, collection, metadata, and click records
+- Optional cached ORCID import with per-record validation and safe DOI fallbacks
+- Shared-key admin dashboard with project and collection CRUD, ordering, pagination, exports, and all-time analytics
+- Public directory/search APIs and authenticated management APIs
 
-### Setting Up
+### Requirements
 
-You will need the following to boot up:
+- Node.js 20.9 or newer
+- pnpm 10.12.1 (the version pinned by `packageManager`)
+- Redis 6 or newer; use an authenticated TLS connection in production
 
-- [Node.js](https://nodejs.org/) (v18 or later recommended)
-- [Redis](https://redis.io/) instance (local or cloud-based)
-- [npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/), [pnpm](https://pnpm.io/), or [bun](https://bun.sh/) package manager
-
-To install and run your own instance:
-
-1. Fork this repository
-2. Clone your forked repository:
-
-   ```bash
-   git clone https://github.com/cytronicoder/research.git
-   cd research-site
-   ```
-
-3. Install dependencies:
-
-   ```bash
-   npm install
-   # or yarn, pnpm, bun
-   ```
-
-4. Create a `.env.local` file with the following variables:
-
-   ```env
-   RESEARCH_REDIS_URL=your-redis-connection-string
-   ADMIN_KEY=your-secure-admin-key
-   ORCID_ID=your-orcid-id
-   ```
-
-   For my project, I am taking advantage of [Vercel's Redis integration](https://vercel.com/integrations/redis). It's pretty straightforward to [set up](https://redis.io/docs/latest/operate/rc/cloud-integrations/vercel/).
-
-   This project also allows you to optionally link your [ORCID](https://orcid.org/) profile by providing your ORCID ID. This will display your ORCID information on the homepage.
-
-Now, start the development server:
+### Local setup
 
 ```bash
-npm run dev
-# or yarn dev, pnpm dev, bun dev
+git clone https://github.com/zeyuyaoy/research.git
+cd research
+pnpm install --frozen-lockfile
+cp .env.example .env.local
+pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view your research site.
+Configure `.env.local` before opening the site:
 
-For API documentation and examples on how to add, update, and manage research projects, see [API.md](API.md).
+```env
+RESEARCH_REDIS_URL=redis://localhost:6379
+ADMIN_KEY=replace-with-a-long-random-secret
+ORCID_ID=0000-0000-0000-0000
+```
 
-### Next Steps
+Open the local site at `http://localhost:3000`; the dashboard is at `/admin`.
 
-You can customize the site further by:
+### Data model
 
-1. Modifying the colors and styling in `src/app/globals.css`
-2. Updating site metadata in `src/app/layout.tsx`
-3. Customizing the components in `src/components/` folder
+- `link:<slug>` — canonical HTTP(S) target
+- `meta:<slug>` — hash containing `title`, `description`, comma-separated `tags`, `permanent`, `createdAt`, `updatedAt`,
+  `startDate`, `endDate`, `githubRepo`, and optional `photoSetId`
+- `count:<slug>` — all-time successful redirect count
+- `collection:<id>` — hash containing `name`, `description`, comma-separated ordered `projects`, comma-separated `tags`,
+  and timestamps
 
-I am currently working on a form UI for submitting research without using the API directly!
+Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Deleting a project also removes its slug from collections. Photo sets
+are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug.
+
+ORCID responses are cached for one hour.
+
+### Quality checks
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm check
+```
 
 ### Deployment
 
-The recommended way to deploy your Research Site is with [Vercel](https://vercel.com):
+Deploy to any Node-compatible Next.js host. For Vercel, import the repository and configure `RESEARCH_REDIS_URL`,
+`ADMIN_KEY`, and optionally `ORCID_ID`. Verify that Redis uses TLS, authentication, persistence, and backups appropriate
+for the deployment. Configure rate limiting or WAF controls at the hosting edge for the public search, directory, and
+redirect routes.
 
-1. Push your repository to GitHub
-2. Import your repository in Vercel
-3. Add your environment variables (RESEARCH_REDIS_URL and ADMIN_KEY)
-4. Deploy
+The application sends anonymous product telemetry through Vercel Analytics.
 
-You can also deploy to other platforms that support Next.js applications.
+See [API.md](API.md) for endpoint contracts and examples.

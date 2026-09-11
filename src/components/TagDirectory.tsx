@@ -1,49 +1,25 @@
 "use client";
 
-import { motion } from "motion/react";
-
-interface TagDirectoryProps {
+export default function TagDirectory({allTags, selectedTag, onTagSelect}: {
     allTags: string[];
     selectedTag: string | null;
-    onTagSelect: (tag: string | null) => void;
-}
-
-export default function TagDirectory({ allTags, selectedTag, onTagSelect }: TagDirectoryProps) {
-    const uniqueTags = Array.from(new Set(allTags)).sort();
-
+    onTagSelect: (tag: string | null) => void
+}) {
+    const uniqueTags = Array.from(new Set(allTags)).sort((a, b) => a.localeCompare(b));
     return (
-        <div className="mb-6">
+        <div className="mb-6" role="group" aria-label="Filter by tag">
             <div className="flex flex-wrap gap-2">
-                <motion.button
-                    onClick={() => onTagSelect(null)}
-                    className="px-3 py-1 text-sm rounded-full transition-colors"
-                    style={{
-                        backgroundColor: selectedTag === null ? 'var(--primary-color)' : 'var(--input-bg)',
-                        color: selectedTag === null ? 'white' : 'var(--primary-color)'
-                    }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                >
-                    All Tags
-                </motion.button>
-                {uniqueTags.map((tag) => (
-                    <motion.button
-                        key={tag}
-                        onClick={() => onTagSelect(selectedTag === tag ? null : tag)}
-                        className="px-3 py-1 text-sm rounded-full transition-colors"
-                        style={{
-                            backgroundColor: selectedTag === tag ? 'var(--primary-color)' : 'var(--input-bg)',
-                            color: selectedTag === tag ? 'white' : 'var(--primary-color)'
-                        }}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        {tag}
-                    </motion.button>
-                ))}
+                {[null, ...uniqueTags].map((tag) => {
+                    const selected = selectedTag === tag;
+                    return <button key={tag || "all"} type="button" aria-pressed={selected}
+                                   onClick={() => onTagSelect(selected && tag ? null : tag)}
+                                   className="rounded-full px-3 py-1.5 text-sm font-semibold transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2"
+                                   style={{
+                                       backgroundColor: selected ? "var(--primary-color)" : "var(--input-bg)",
+                                       color: selected ? "var(--on-primary)" : "var(--primary-color)",
+                                       border: "1px solid var(--input-border)"
+                                   }}>{tag || "All tags"}</button>;
+                })}
             </div>
         </div>
     );

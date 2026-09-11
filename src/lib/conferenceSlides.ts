@@ -1,102 +1,76 @@
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
+import fs from "node:fs";
+import path from "node:path";
+import {load as loadYaml} from "js-yaml";
+import {isValidDate, normalizeTags} from "./models";
 
-export type Slide = {
-  src: string;
-  alt?: string;
-  caption?: string;
-  date?: string;
-};
+export interface Slide {
+    src: string;
+    alt: string;
+    caption?: string;
+    date?: string;
+}
 
-export type PhotoSet = {
-  id: string;
-  title?: string;
-  description?: string;
-  date?: string; // ISO date
-  tags?: string[];
-  slides: Slide[];
-};
+export interface PhotoSet {
+    id: string;
+    title?: string;
+    description?: string;
+    date?: string;
+    tags?: string[];
+    slides: Slide[];
+}
 
-// Load and parse the YAML photoSets at module load (server-side code)
+function optionalText(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+export function parsePhotoSets(value: unknown): Record<string, PhotoSet> {
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("photoSets.yml must contain a mapping");
+    const result: Record<string, PhotoSet> = {};
+    for (const [rawKey, rawValue] of Object.entries(value)) {
+        if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) throw new Error(`photo set ${rawKey} must be a mapping`);
+        const item = rawValue as Record<string, unknown>;
+        if (!Array.isArray(item.slides) || item.slides.length === 0) throw new Error(`photo set ${rawKey} must include slides`);
+        const slides = item.slides.map((rawSlide, index): Slide => {
+            if (!rawSlide || typeof rawSlide !== "object" || Array.isArray(rawSlide)) throw new Error(`slide ${index + 1} in ${rawKey} must be a mapping`);
+            const slide = rawSlide as Record<string, unknown>;
+            const src = optionalText(slide.src);
+            const alt = optionalText(slide.alt);
+            const date = optionalText(slide.date);
+            if (!src?.startsWith("/") || !alt) throw new Error(`slide ${index + 1} in ${rawKey} requires an absolute src and descriptive alt`);
+            if (date && !isValidDate(date)) throw new Error(`slide ${index + 1} in ${rawKey} has an invalid ISO date`);
+            return {src, alt, caption: optionalText(slide.caption), date};
+        }).toSorted((a, b) => (b.date || "").localeCompare(a.date || "") || a.src.localeCompare(b.src));
+        const key = rawKey.toLowerCase();
+        const date = optionalText(item.date);
+        if (date && !isValidDate(date)) throw new Error(`photo set ${rawKey} has an invalid ISO date`);
+        result[key] = {
+            id: optionalText(item.id) || key,
+            title: optionalText(item.title),
+            description: optionalText(item.description),
+            date,
+            tags: normalizeTags(item.tags),
+            slides
+        };
+    }
+    return result;
+}
+
 const photoSetsFile = path.join(process.cwd(), "src", "data", "photoSets.yml");
-let rawPhotoSets: Record<string, any> = {};
+let photoSets: Record<string, PhotoSet> = {};
 try {
-  const raw = fs.readFileSync(photoSetsFile, "utf8");
-  rawPhotoSets = yaml.load(raw) as Record<string, any>;
-} catch (e) {
-  // If file missing or parse error, keep empty mapping
-  console.error("Failed to load photoSets.yml:", e);
-  rawPhotoSets = {};
+    photoSets = parsePhotoSets(loadYaml(fs.readFileSync(photoSetsFile, "utf8")));
+} catch (error) {
+    console.error("Failed to load photoSets.yml:", error);
 }
 
-// Normalize and build a mapping keyed by lowercase key
-const photoSets: Record<string, PhotoSet> = Object.keys(rawPhotoSets).reduce((acc, k) => {
-  const item = rawPhotoSets[k] as PhotoSet;
-  const key = k.toLowerCase();
-  // sort slides inside a set: by date (oldest first) when present, otherwise by src name
-  const slides = ((item.slides || []) as Slide[]).slice().sort((a, b) => {
-    const da = a.date ? Date.parse(a.date) : NaN;
-    const db = b.date ? Date.parse(b.date) : NaN;
-
-    if (!isNaN(da) && !isNaN(db) && da !== db) return da - db;
-    if (!isNaN(da) && isNaN(db)) return -1;
-    if (isNaN(da) && !isNaN(db)) return 1;
-
-    // fallback: alphabetical by src
-    return (a.src || "").localeCompare(b.src || "");
-  });
-
-  acc[key] = {
-    id: item.id || key,
-    title: item.title,
-    description: item.description,
-    date: item.date,
-    tags: item.tags,
-    slides,
-  };
-  return acc;
-}, {} as Record<string, PhotoSet>);
-
-// Slides lookup
-const projectSlides: Record<string, Slide[]> = Object.keys(photoSets).reduce((acc, k) => {
-  acc[k.toLowerCase()] = photoSets[k].slides;
-  return acc;
-}, {} as Record<string, Slide[]>);
-
-/**
- * Lookup slides for a given key (project slug or collection id). Key match is case-insensitive.
- */
-export function getSlidesFor(key?: string): Slide[] | undefined {
-  if (!key) return undefined;
-  return projectSlides[key.toLowerCase()];
+export function getSlidesFor(key?: string) {
+    return key ? photoSets[key.toLowerCase()]?.slides : undefined;
 }
 
-/**
- * Return the full PhotoSet metadata for a given key (if available)
- */
-export function getPhotoSet(key?: string): PhotoSet | undefined {
-  if (!key) return undefined;
-  return photoSets[key.toLowerCase()];
+export function getPhotoSet(key?: string) {
+    return key ? photoSets[key.toLowerCase()] : undefined;
 }
 
-/**
- * Return all photo sets sorted by date (oldest first). If date is missing or equal, sort by id.
- * If dates equal and both have slides, use first slide src name to break ties.
- */
-export function getAllPhotoSets(): PhotoSet[] {
-  return Object.values(photoSets).sort((a, b) => {
-    const dateA = a.date ? new Date(a.date).getTime() : 0;
-    const dateB = b.date ? new Date(b.date).getTime() : 0;
-    if (dateA !== dateB) return dateA - dateB; // old to new
-
-    // fallback: compare id
-    const idCmp = (a.id || "").localeCompare(b.id || "");
-    if (idCmp !== 0) return idCmp;
-
-    // final tie-breaker: compare first slide src
-    const srcA = a.slides?.[0]?.src || "";
-    const srcB = b.slides?.[0]?.src || "";
-    return srcA.localeCompare(srcB);
-  });
+export function getAllPhotoSets() {
+    return Object.values(photoSets).toSorted((a, b) => (b.date || "").localeCompare(a.date || "") || a.id.localeCompare(b.id));
 }

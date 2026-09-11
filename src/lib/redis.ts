@@ -1,87 +1,64 @@
-import { createClient } from "redis";
+import {createClient, type RedisClientType} from "redis";
 
-const redisUrl =
-  process.env.RESEARCH_REDIS_URL ||
-  process.env.REDIS_URL ||
-  "redis://localhost:6379";
-
-let client: ReturnType<typeof createClient> | null = null;
-let isConnecting = false;
-
-export async function getRedisClient() {
-  if (client?.isOpen) {
-    return client;
-  }
-
-  if (isConnecting && client) {
-    let retries = 0;
-    while (isConnecting && retries < 50) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      retries++;
+export class RedisUnavailableError extends Error {
+    constructor(message = "Redis is unavailable") {
+        super(message);
+        this.name = "RedisUnavailableError";
     }
-    if (client?.isOpen) {
-      return client;
-    }
-  }
+}
 
-  isConnecting = true;
+type RedisClient = RedisClientType;
+let client: RedisClient | null = null;
+let connection: Promise<RedisClient> | null = null;
 
-  try {
-    if (!client) {
-      client = createClient({
+export function getRedisUrl(): string | null {
+    return process.env.RESEARCH_REDIS_URL || process.env.REDIS_URL || null;
+}
+
+export async function getRedisClient(): Promise<RedisClient> {
+    const redisUrl = getRedisUrl();
+    if (!redisUrl) throw new RedisUnavailableError("Redis is not configured");
+    if (client?.isReady) return client;
+    if (connection) return connection;
+
+    const nextClient = createClient({
         url: redisUrl,
-        socket: {
-          reconnectStrategy: (retries) => {
-            if (retries > 10) {
-              console.error("Redis: Too many reconnection attempts");
-              return new Error("Too many reconnection attempts");
-            }
-            return Math.min(retries * 50, 3000);
-          },
-        },
-      });
+        socket: {connectTimeout: 3_000, reconnectStrategy: false},
+    });
+    nextClient.on("error", () => {
+        // Route handlers translate connection failures into a stable 503 response.
+    });
 
-      client.on("error", (err) => {
-        console.error("Redis Client Error:", err);
-      });
-
-      client.on("reconnecting", () => {
-        console.log("Redis: Reconnecting...");
-      });
-
-      client.on("ready", () => {
-        console.log("Redis: Connected successfully");
-      });
-    }
-
-    if (!client.isOpen) {
-      await client.connect();
-    }
-
-    return client;
-  } catch (error) {
-    console.error("Redis: Failed to connect:", error);
-    client = null;
-    throw error;
-  } finally {
-    isConnecting = false;
-  }
+    connection = nextClient
+        .connect()
+        .then(() => {
+            client = nextClient;
+            return nextClient;
+        })
+        .catch(() => {
+            if (nextClient.isOpen) nextClient.destroy();
+            throw new RedisUnavailableError();
+        })
+        .finally(() => {
+            connection = null;
+        });
+    return connection;
 }
 
 export async function closeRedisClient() {
-  if (client?.isOpen) {
-    await client.quit();
+    if (client?.isOpen) await client.quit();
     client = null;
-  }
+    connection = null;
 }
 
 export async function checkRedisHealth(): Promise<boolean> {
-  try {
-    const redis = await getRedisClient();
-    const result = await redis.ping();
-    return result === "PONG";
-  } catch (error) {
-    console.error("Redis health check failed:", error);
-    return false;
-  }
+    try {
+        return (await (await getRedisClient()).ping()) === "PONG";
+    } catch {
+        return false;
+    }
+}
+
+export async function resetRedisClientForTests() {
+    await closeRedisClient();
 }

@@ -1,297 +1,130 @@
-import { getRedisClient } from "@/lib/redis";
-import { NextRequest, NextResponse } from "next/server";
-
-function unauthorized() {
-  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-}
+import {NextRequest, NextResponse} from "next/server";
+import {authorizeAdmin, jsonError, PRIVATE_HEADERS, readJson, routeError} from "@/lib/api";
+import {getDirectorySnapshot, invalidateDirectoryCache} from "@/lib/directory";
+import {isValidSlug, normalizeSlug, normalizeTags} from "@/lib/models";
+import {getRedisClient} from "@/lib/redis";
 
 export async function GET(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY)
-    return unauthorized();
-
-  try {
-    const redis = await getRedisClient();
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get("action");
-
-    if (action === "stats") {
-      const keys = await redis.keys("link:*");
-
-      const pipeline = redis.multi();
-      for (const key of keys) {
-        const slug = key.replace("link:", "");
-        pipeline.hGetAll(`meta:${slug}`);
-        pipeline.get(`count:${slug}`);
-      }
-
-      const pipelineResults = await pipeline.exec();
-      if (!pipelineResults) {
-        throw new Error("Pipeline execution failed");
-      }
-
-      const tagCounts: Record<string, number> = {};
-      const sourceCounts: Record<string, number> = {
-        manual: 0,
-        orcid: 0,
-      };
-      let totalClicks = 0;
-      let totalLinks = 0;
-
-      for (let i = 0; i < keys.length; i++) {
-        const slug = keys[i].replace("link:", "");
-        const meta = pipelineResults[i * 2] as unknown as Record<
-          string,
-          string
-        > | null;
-        const clicks = pipelineResults[i * 2 + 1] as unknown as string | null;
-
-        if (!meta) continue;
-
-        totalLinks++;
-        totalClicks += Number(clicks || 0);
-
-        if (meta.tags) {
-          const tags = meta.tags.split(",");
-          tags.forEach((tag) => {
-            const trimmedTag = tag.trim();
-            if (trimmedTag)
-              tagCounts[trimmedTag] = (tagCounts[trimmedTag] || 0) + 1;
-          });
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const {searchParams} = new URL(req.url);
+        const action = searchParams.get("action");
+        if (action !== "stats" && action !== "suggest") return jsonError("action must be stats or suggest", 400);
+        const {projects} = await getDirectorySnapshot();
+        const counts = new Map<string, number>();
+        for (const project of projects) {
+            for (const tag of project.metadata.tags) counts.set(tag, (counts.get(tag) || 0) + 1);
         }
-
-        if (slug.startsWith("orcid-")) sourceCounts.orcid++;
-        else sourceCounts.manual++;
-      }
-
-      const sortedTags = Object.entries(tagCounts)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 20);
-
-      return NextResponse.json({
-        totalLinks,
-        totalClicks,
-        sources: sourceCounts,
-        topTags: sortedTags,
-        uniqueTags: Object.keys(tagCounts).length,
-      });
-    } else if (action === "suggest") {
-      const prefix = searchParams.get("prefix") || "";
-      const keys = await redis.keys("link:*");
-
-      const pipeline = redis.multi();
-      for (const key of keys) {
-        const slug = key.replace("link:", "");
-        pipeline.hGetAll(`meta:${slug}`);
-      }
-
-      const pipelineResults = await pipeline.exec();
-      if (!pipelineResults) {
-        throw new Error("Pipeline execution failed");
-      }
-
-      const tagSet = new Set<string>();
-
-      for (let i = 0; i < keys.length; i++) {
-        const meta = pipelineResults[i] as unknown as Record<
-          string,
-          string
-        > | null;
-
-        if (!meta) continue;
-
-        if (meta.tags) {
-          const tags = meta.tags.split(",");
-          tags.forEach((tag) => {
-            const trimmedTag = tag.trim();
-            if (
-              trimmedTag &&
-              trimmedTag.toLowerCase().startsWith(prefix.toLowerCase())
-            ) {
-              tagSet.add(trimmedTag);
-            }
-          });
+        if (action === "suggest") {
+            const prefix = (searchParams.get("prefix") || "").trim().toLowerCase();
+            if (prefix.length > 80) return jsonError("prefix must be at most 80 characters", 400);
+            return NextResponse.json({suggestions: [...counts.keys()].filter((tag) => tag.toLowerCase().startsWith(prefix)).sort().slice(0, 10)}, {headers: PRIVATE_HEADERS});
         }
-      }
-
-      return NextResponse.json({
-        suggestions: Array.from(tagSet).sort().slice(0, 10),
-      });
+        const sources = projects.reduce((result, project) => ({
+            ...result,
+            [project.source]: result[project.source] + 1
+        }), {manual: 0, orcid: 0});
+        return NextResponse.json({
+            totalLinks: projects.length,
+            totalClicks: projects.reduce((sum, project) => sum + project.clicks, 0),
+            sources,
+            topTags: [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 20),
+            uniqueTags: counts.size,
+        }, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "GET /api/tags");
     }
+}
 
-    return NextResponse.json(
-      {
-        error:
-          "Invalid action. Use ?action=stats or ?action=suggest&prefix=...",
-      },
-      { status: 400 }
-    );
-  } catch (error) {
-    console.error("Error in tags endpoint:", error);
-    return NextResponse.json(
-      { error: "failed to process tags request" },
-      { status: 500 }
-    );
-  }
+async function existingSlugs(raw: unknown): Promise<{ slugs: string[]; error?: NextResponse }> {
+    if (!Array.isArray(raw)) return {slugs: [], error: jsonError("slugs must be an array", 400)};
+    const slugs = raw.filter((value): value is string => typeof value === "string").map(normalizeSlug);
+    if (slugs.length === 0 || slugs.some((slug) => !isValidSlug(slug))) return {
+        slugs: [],
+        error: jsonError("slugs contains an invalid slug", 400)
+    };
+    const {projects} = await getDirectorySnapshot({fresh: true});
+    const known = new Set(projects.map((project) => project.slug));
+    const missing = slugs.filter((slug) => !known.has(slug));
+    if (missing.length > 0) return {slugs: [], error: jsonError("project not found", 404, missing)};
+    return {slugs};
+}
+
+async function updateProjectTags(slugs: string[], update: (tags: string[]) => string[]) {
+    const redis = await getRedisClient();
+    const reads = redis.multi();
+    slugs.forEach((slug) => reads.hGetAll(`meta:${slug}`));
+    const metas = await reads.exec();
+    const writes = redis.multi();
+    slugs.forEach((slug, index) => {
+        const meta = metas[index] as unknown as Record<string, string>;
+        writes.hSet(`meta:${slug}`, {
+            tags: update(normalizeTags(meta?.tags)).join(","),
+            updatedAt: new Date().toISOString()
+        });
+    });
+    await writes.exec();
+    invalidateDirectoryCache();
 }
 
 export async function POST(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY)
-    return unauthorized();
-
-  try {
-    const { slugs, tags } = await req.json();
-    if (!slugs || !Array.isArray(slugs) || !tags || !Array.isArray(tags))
-      return NextResponse.json(
-        { error: "slugs (array) and tags (array) required" },
-        { status: 400 }
-      );
-
-    const redis = await getRedisClient();
-    let updatedCount = 0;
-
-    for (const slug of slugs) {
-      const meta = await redis.hGetAll(`meta:${slug}`);
-      const existingTags = meta.tags
-        ? meta.tags.split(",").map((t) => t.trim())
-        : [];
-      const newTags = [...new Set([...existingTags, ...tags])];
-
-      if (newTags.length !== existingTags.length) {
-        await redis.hSet(`meta:${slug}`, { tags: newTags.join(",") });
-        updatedCount++;
-      }
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const body = await readJson(req);
+        if (!body || typeof body !== "object") return jsonError("invalid request body", 400);
+        const raw = body as Record<string, unknown>;
+        const checked = await existingSlugs(raw.slugs);
+        if (checked.error) return checked.error;
+        const tags = normalizeTags(raw.tags);
+        if (tags.length === 0) return jsonError("tags must contain at least one tag", 400);
+        await updateProjectTags(checked.slugs, (existing) => Array.from(new Set([...existing, ...tags])));
+        return NextResponse.json({updated: checked.slugs.length, tags}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "POST /api/tags");
     }
-
-    return NextResponse.json({
-      message: `Added tags ${tags.join(", ")} to ${updatedCount} entries`,
-    });
-  } catch (error) {
-    console.error("Error adding tags:", error);
-    return NextResponse.json({ error: "Failed to add tags" }, { status: 500 });
-  }
 }
 
 export async function PATCH(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY)
-    return unauthorized();
-
-  try {
-    const body = await req.json();
-
-    if (body.oldTag && body.newTag) {
-      const { oldTag, newTag } = body;
-
-      const redis = await getRedisClient();
-      const keys = await redis.keys("link:*");
-
-      let updatedCount = 0;
-
-      for (const key of keys) {
-        const slug = key.replace("link:", "");
-        const meta = await redis.hGetAll(`meta:${slug}`);
-
-        if (meta.tags) {
-          const tags = meta.tags.split(",");
-          const updatedTags = tags.map((tag) =>
-            tag.trim() === oldTag.trim() ? newTag : tag
-          );
-
-          if (updatedTags.join(",") !== meta.tags) {
-            await redis.hSet(`meta:${slug}`, { tags: updatedTags.join(",") });
-            updatedCount++;
-          }
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const body = await readJson(req);
+        if (!body || typeof body !== "object") return jsonError("invalid request body", 400);
+        const raw = body as Record<string, unknown>;
+        const {projects} = await getDirectorySnapshot({fresh: true});
+        if (typeof raw.oldTag === "string" && typeof raw.newTag === "string") {
+            const oldTag = raw.oldTag.trim();
+            const newTag = normalizeTags([raw.newTag])[0];
+            if (!oldTag || !newTag) return jsonError("oldTag and newTag are required", 400);
+            const affected = projects.filter((project) => project.metadata.tags.includes(oldTag)).map((project) => project.slug);
+            await updateProjectTags(affected, (tags) => Array.from(new Set(tags.map((tag) => tag === oldTag ? newTag : tag))));
+            return NextResponse.json({updated: affected.length}, {headers: PRIVATE_HEADERS});
         }
-      }
-
-      return NextResponse.json({
-        message: `Renamed tag "${oldTag}" to "${newTag}" in ${updatedCount} entries`,
-      });
+        const checked = await existingSlugs(raw.slugs);
+        if (checked.error) return checked.error;
+        const remove = new Set(normalizeTags(raw.tags));
+        if (remove.size === 0) return jsonError("tags must contain at least one tag", 400);
+        await updateProjectTags(checked.slugs, (tags) => tags.filter((tag) => !remove.has(tag)));
+        return NextResponse.json({updated: checked.slugs.length}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "PATCH /api/tags");
     }
-
-    if (
-      body.slugs &&
-      Array.isArray(body.slugs) &&
-      body.tags &&
-      Array.isArray(body.tags)
-    ) {
-      const { slugs, tags } = body;
-
-      const redis = await getRedisClient();
-      let updatedCount = 0;
-
-      for (const slug of slugs) {
-        const meta = await redis.hGetAll(`meta:${slug}`);
-        if (meta.tags) {
-          const existingTags = meta.tags.split(",").map((t) => t.trim());
-          const filteredTags = existingTags.filter(
-            (tag) => !tags.includes(tag)
-          );
-
-          if (filteredTags.length !== existingTags.length) {
-            await redis.hSet(`meta:${slug}`, { tags: filteredTags.join(",") });
-            updatedCount++;
-          }
-        }
-      }
-
-      return NextResponse.json({
-        message: `Removed tags ${tags.join(", ")} from ${updatedCount} entries`,
-      });
-    }
-
-    return NextResponse.json(
-      {
-        error:
-          "Invalid request. Use oldTag/newTag for renaming or slugs/tags for bulk removal",
-      },
-      { status: 400 }
-    );
-  } catch (error) {
-    console.error("Error in PATCH /api/tags:", error);
-    return NextResponse.json(
-      { error: "Failed to process request" },
-      { status: 500 }
-    );
-  }
 }
 
 export async function DELETE(req: NextRequest) {
-  if (req.headers.get("x-admin-key") !== process.env.ADMIN_KEY)
-    return unauthorized();
-
-  try {
-    const { tag } = await req.json();
-    if (!tag)
-      return NextResponse.json({ error: "tag required" }, { status: 400 });
-
-    const redis = await getRedisClient();
-    const keys = await redis.keys("link:*");
-
-    let updatedCount = 0;
-
-    for (const key of keys) {
-      const slug = key.replace("link:", "");
-      const meta = await redis.hGetAll(`meta:${slug}`);
-
-      if (meta.tags) {
-        const tags = meta.tags.split(",");
-        const filteredTags = tags.filter((t) => t.trim() !== tag.trim());
-
-        if (filteredTags.length !== tags.length) {
-          await redis.hSet(`meta:${slug}`, { tags: filteredTags.join(",") });
-          updatedCount++;
-        }
-      }
+    const auth = authorizeAdmin(req);
+    if (auth) return auth;
+    try {
+        const body = await readJson(req);
+        const tag = body && typeof body === "object" && typeof (body as Record<string, unknown>).tag === "string" ? (body as Record<string, string>).tag.trim() : "";
+        if (!tag) return jsonError("tag is required", 400);
+        const {projects} = await getDirectorySnapshot({fresh: true});
+        const affected = projects.filter((project) => project.metadata.tags.includes(tag)).map((project) => project.slug);
+        await updateProjectTags(affected, (tags) => tags.filter((value) => value !== tag));
+        return NextResponse.json({updated: affected.length}, {headers: PRIVATE_HEADERS});
+    } catch (error) {
+        return routeError(error, "DELETE /api/tags");
     }
-
-    return NextResponse.json({
-      message: `Removed tag "${tag}" from ${updatedCount} entries`,
-    });
-  } catch (error) {
-    console.error("Error removing tag:", error);
-    return NextResponse.json(
-      { error: "Failed to remove tag" },
-      { status: 500 }
-    );
-  }
 }
