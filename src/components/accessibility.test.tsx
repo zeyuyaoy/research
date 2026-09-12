@@ -1,6 +1,7 @@
-import {fireEvent, render, screen} from "@testing-library/react";
+import {act, fireEvent, render, screen, within} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 import type {PublicProject} from "@/lib/models";
+import {toProjectSummary} from "@/lib/archive";
 import ConferenceCarousel from "./ConferenceCarousel";
 import ProjectCard from "./ProjectCard";
 import ShareButton from "./ShareButton";
@@ -12,7 +13,14 @@ const project: PublicProject = {
     shortUrl: "/safe-project",
     title: "Safe <script>title</script>",
     description: "Research description",
+    longDescription: null,
     tags: ["biology"],
+    researchAreas: [],
+    technologies: [],
+    methods: [],
+    organizations: [],
+    collaborators: [],
+    artifacts: [],
     source: "manual",
     createdAt: "2025-01-01T00:00:00.000Z",
     updatedAt: null,
@@ -24,15 +32,15 @@ const project: PublicProject = {
 
 describe("public controls", () => {
     it("renders highlighted stored text as inert text", () => {
-        const {container} = render(<ProjectCard project={project} highlights={["safe"]}/>);
+        const {container} = render(<ProjectCard project={toProjectSummary(project)} highlights={["safe"]}/>);
         expect(screen.getByRole("heading")).toHaveTextContent("Safe <script>title</script>");
         expect(container.querySelector("script")).toBeNull();
     });
 
     it("exposes selected tag state", () => {
         const onSelect = vi.fn();
-        render(<TagDirectory allTags={["biology"]} selectedTag="biology" onTagSelect={onSelect}/>);
-        const button = screen.getByRole("button", {name: "biology"});
+        const {container} = render(<TagDirectory allTags={["biology"]} selectedTag="biology" onTagSelect={onSelect}/>);
+        const button = within(container).getByRole("button", {name: "biology"});
         expect(button).toHaveAttribute("aria-pressed", "true");
         fireEvent.click(button);
         expect(onSelect).toHaveBeenCalledWith(null);
@@ -47,6 +55,27 @@ describe("public controls", () => {
         expect(screen.getByRole("button", {name: "Resume slideshow"})).toBeInTheDocument();
         fireEvent.mouseLeave(screen.getByRole("region", {name: "Conference photos"}));
         expect(screen.getByRole("button", {name: "Resume slideshow"})).toBeInTheDocument();
+    });
+
+    it("does not auto-advance a carousel when reduced motion is preferred", async () => {
+        vi.useFakeTimers();
+        const previousMatchMedia = window.matchMedia;
+        window.matchMedia = vi.fn().mockReturnValue({
+            matches: true,
+            media: "(prefers-reduced-motion: reduce)",
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn()
+        });
+        render(<ConferenceCarousel slides={[{src: "/first.jpeg", alt: "First reduced-motion slide"}, {
+            src: "/second.jpeg",
+            alt: "Second reduced-motion slide"
+        }]}/>);
+        await act(async () => {
+            vi.advanceTimersByTime(6_000);
+        });
+        expect(screen.getByAltText("Second reduced-motion slide").parentElement).toHaveAttribute("aria-hidden", "true");
+        window.matchMedia = previousMatchMedia;
+        vi.useRealTimers();
     });
 
     it("closes the share menu with Escape and restores trigger focus", async () => {

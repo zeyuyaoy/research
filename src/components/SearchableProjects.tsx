@@ -1,128 +1,180 @@
 "use client";
 
-import {useDeferredValue, useMemo, useState} from "react";
-import type {CollectionView, ProjectView} from "@/app/page";
-import {researchTimestamp} from "@/lib/models";
+import {Filter, Search, X} from "lucide-react";
+import Image from "next/image";
+import {useCallback, useDeferredValue, useEffect, useMemo, useRef, useState} from "react";
+import {type ArchiveState, archiveUrl, filterProjects, parseArchiveState} from "@/lib/archive";
+import type {CollectionView, ProjectView} from "@/lib/views";
 import CollectionCard from "./CollectionCard";
-import ProjectFooter from "./ProjectFooter";
+import FilterDrawer from "./FilterDrawer";
 import ProjectList from "./ProjectList";
-import SearchBar from "./SearchBar";
-import TagDirectory from "./TagDirectory";
+import SiteHeader from "./SiteHeader";
+import TimelineView from "./TimelineView";
 
-type SortOption = "alphabetical-asc" | "alphabetical-desc" | "newest" | "oldest";
-
-function compareProjects(a: ProjectView, b: ProjectView, sortBy: SortOption) {
-    if (sortBy === "alphabetical-asc") return a.title.localeCompare(b.title);
-    if (sortBy === "alphabetical-desc") return b.title.localeCompare(a.title);
-    const dateA = researchTimestamp({startDate: a.startDate, endDate: a.endDate, createdAt: a.createdAt});
-    const dateB = researchTimestamp({startDate: b.startDate, endDate: b.endDate, createdAt: b.createdAt});
-    return sortBy === "newest" ? dateB - dateA || a.title.localeCompare(b.title) : dateA - dateB || a.title.localeCompare(b.title);
-}
-
-function compareCollections(a: CollectionView, b: CollectionView, sortBy: SortOption) {
-    if (sortBy === "alphabetical-asc") return a.name.localeCompare(b.name);
-    if (sortBy === "alphabetical-desc") return b.name.localeCompare(a.name);
-    const dateA = Date.parse(a.updatedAt || a.createdAt);
-    const dateB = Date.parse(b.updatedAt || b.createdAt);
-    return sortBy === "newest" ? dateB - dateA || a.name.localeCompare(b.name) : dateA - dateB || a.name.localeCompare(b.name);
-}
-
-export default function SearchableProjects({
-                                               initialLinks,
-                                               initialCollections = [],
-                                               availability,
-                                           }: {
+export default function SearchableProjects({initialLinks, initialCollections = [], availability, initialState}: {
     initialLinks: ProjectView[];
     initialCollections?: CollectionView[];
     availability: "ready" | "unconfigured" | "unavailable";
+    initialState: ArchiveState;
 }) {
-    const [searchQuery, setSearchQuery] = useState("");
-    const deferredQuery = useDeferredValue(searchQuery.trim().toLowerCase());
-    const [sourceFilter, setSourceFilter] = useState<"all" | "manual" | "orcid">("all");
-    const [selectedTag, setSelectedTag] = useState<string | null>(null);
-    const [sortBy, setSortBy] = useState<SortOption>("alphabetical-asc");
+    const [state, setState] = useState(initialState);
+    const [filtersOpen, setFiltersOpen] = useState(false);
+    const searchRef = useRef<HTMLInputElement>(null);
+    const deferredQuery = useDeferredValue(state.query);
 
+    const commit = useCallback((next: ArchiveState, mode: "push" | "replace" = "push") => {
+        setState(next);
+        const url = archiveUrl(next, window.location.href);
+        History.prototype[mode === "push" ? "pushState" : "replaceState"].call(window.history, {}, "", url);
+    }, []);
+
+    useEffect(() => {
+        const onPopState = () => setState(parseArchiveState(new URLSearchParams(window.location.search)));
+        const onKey = (event: KeyboardEvent) => {
+            const target = event.target;
+            const editable = target instanceof HTMLElement && target.matches("input, textarea, select, [contenteditable]");
+            if (event.key === "/" && !editable && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                event.preventDefault();
+                searchRef.current?.focus();
+            }
+        };
+        window.addEventListener("popstate", onPopState);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            window.removeEventListener("popstate", onPopState);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, []);
+
+    useEffect(() => {
+        const timeout = window.setTimeout(() => {
+            const url = archiveUrl(state, window.location.href);
+            History.prototype.replaceState.call(window.history, {}, "", url);
+        }, 120);
+        return () => window.clearTimeout(timeout);
+    }, [state.query, state]);
+
+    const effectiveState = useMemo(() => ({...state, query: deferredQuery}), [deferredQuery, state]);
+    const filtered = useMemo(() => filterProjects(initialLinks, effectiveState), [effectiveState, initialLinks]);
     const model = useMemo(() => {
-        const selected = selectedTag?.toLowerCase() || "";
-        const sourceMatches = (project: ProjectView) => sourceFilter === "all" || project.source === sourceFilter;
-        const searchMatches = (project: ProjectView) => !deferredQuery || [project.slug, project.target, project.title, project.description || "", ...project.tags].some((value) => value.toLowerCase().includes(deferredQuery));
-        const tagMatches = (project: ProjectView) => !selected || project.tags.some((tag) => tag.toLowerCase() === selected);
-        const filtered = initialLinks.filter((project) => sourceMatches(project) && searchMatches(project) && tagMatches(project)).toSorted((a, b) => compareProjects(a, b, sortBy));
-
+        const visibleSlugs = new Set(filtered.map((project) => project.slug));
         const collections = initialCollections.flatMap((collection) => {
-            const ownSearchMatch = Boolean(deferredQuery) && [collection.name, collection.description].some((value) => value.toLowerCase().includes(deferredQuery));
-            const ownTagMatch = Boolean(selected) && collection.tags.some((tag) => tag.toLowerCase() === selected);
-            const members = initialLinks
-                .filter((project) => collection.projects.includes(project.slug) && sourceMatches(project))
-                .filter((project) => ownSearchMatch || ownTagMatch || (searchMatches(project) && tagMatches(project)))
-                .toSorted((a, b) => compareProjects(a, b, sortBy));
-            if (!members.length) return [];
-            const years = members.flatMap((project) => [project.startDate, project.endDate]).filter((value): value is string => Boolean(value)).map((value) => Number(value.slice(0, 4))).filter(Number.isFinite);
-            return [{
-                ...collection,
-                members,
-                startDate: years.length ? String(Math.min(...years)) : null,
-                endDate: years.length ? String(Math.max(...years)) : null
-            }];
-        }).toSorted((a, b) => compareCollections(a, b, sortBy));
-
+            const members = initialLinks.filter((project) => collection.projects.includes(project.slug) && visibleSlugs.has(project.slug));
+            return members.length ? [{...collection, members}] : [];
+        });
         const grouped = new Set(collections.flatMap((collection) => collection.members.map((project) => project.slug)));
-        const standalone = filtered.filter((project) => !grouped.has(project.slug));
-        const visible = new Set([...grouped, ...standalone.map((project) => project.slug)]).size;
-        return {collections, standalone, visible};
-    }, [deferredQuery, initialCollections, initialLinks, selectedTag, sortBy, sourceFilter]);
+        return {collections, standalone: filtered.filter((project) => !grouped.has(project.slug))};
+    }, [filtered, initialCollections, initialLinks]);
 
-    const hasOrcid = initialLinks.some((project) => project.source === "orcid");
-    const hasManual = initialLinks.some((project) => project.source === "manual");
-    const allTags = [...initialLinks.flatMap((project) => project.tags), ...initialCollections.flatMap((collection) => collection.tags)];
-    const filtersActive = Boolean(searchQuery || selectedTag || sourceFilter !== "all");
+    const tagCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        initialLinks.forEach((project) => project.researchAreas.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1)));
+        const featured = ["computational biology", "machine learning", "bioinformatics", "embeddings"];
+        return [...counts.entries()].toSorted((a, b) => {
+            const aIndex = featured.indexOf(a[0].toLowerCase());
+            const bIndex = featured.indexOf(b[0].toLowerCase());
+            if (aIndex >= 0 || bIndex >= 0) return (aIndex < 0 ? featured.length : aIndex) - (bIndex < 0 ? featured.length : bIndex);
+            return b[1] - a[1] || a[0].localeCompare(b[0]);
+        });
+    }, [initialLinks]);
+    const filtersActive = Boolean(state.query || state.tags.length || state.source !== "all" || state.year);
+    const filterCount = state.tags.length + (state.source === "all" ? 0 : 1) + (state.year ? 1 : 0);
+    const highlights = deferredQuery.trim().split(/\s+/).filter(Boolean);
+    const clearFilters = useCallback(() => commit({
+        ...state,
+        query: "",
+        tags: [],
+        source: "all",
+        year: null
+    }), [commit, state]);
+    const toggleTag = useCallback((tag: string) => {
+        const selected = state.tags.some((value) => value.toLowerCase() === tag.toLowerCase());
+        commit({
+            ...state,
+            tags: selected ? state.tags.filter((value) => value.toLowerCase() !== tag.toLowerCase()) : [...state.tags, tag]
+        });
+    }, [commit, state]);
 
-    return (
-        <>
-            <SearchBar searchQuery={searchQuery} onSearchChange={setSearchQuery}
-                       resultsCount={filtersActive ? model.visible : undefined}/>
-            <section aria-label="Directory controls"
-                     className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                {hasOrcid && hasManual ? (
-                    <div role="group" aria-label="Project source"
-                         className="inline-flex self-start rounded-lg border p-1"
-                         style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
-                        {(["all", "manual", "orcid"] as const).map((source) => (
-                            <button key={source} type="button" aria-pressed={sourceFilter === source}
-                                    onClick={() => setSourceFilter(source)}
-                                    className="rounded-md px-3 py-1.5 text-sm font-semibold capitalize focus-visible:outline-none focus-visible:ring-2"
-                                    style={{
-                                        backgroundColor: sourceFilter === source ? "var(--primary-color)" : "transparent",
-                                        color: sourceFilter === source ? "var(--on-primary)" : "var(--text-color)"
-                                    }}>{source}</button>
-                        ))}
-                    </div>
-                ) : <span/>}
-                <label className="flex items-center gap-2 text-sm font-semibold" style={{color: "var(--text-color)"}}>
-                    Sort by
-                    <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)}
-                            className="rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2"
-                            style={{
-                                backgroundColor: "var(--input-bg)",
-                                borderColor: "var(--input-border)",
-                                color: "var(--text-color)"
-                            }}>
-                        <option value="alphabetical-asc">Alphabetical (A–Z)</option>
-                        <option value="alphabetical-desc">Alphabetical (Z–A)</option>
-                        <option value="newest">Newest first</option>
-                        <option value="oldest">Oldest first</option>
-                    </select>
-                </label>
-            </section>
-            {allTags.length > 0 ?
-                <TagDirectory allTags={allTags} selectedTag={selectedTag} onTagSelect={setSelectedTag}/> : null}
-            {model.collections.map((collection) => <CollectionCard key={collection.id} {...collection}
-                                                                   projects={collection.members}
-                                                                   highlights={deferredQuery ? [deferredQuery] : []}/>)}
-            <ProjectList links={model.standalone} isSearching={filtersActive}
-                         highlights={deferredQuery ? [deferredQuery] : []} availability={availability}
-                         hasCollectionResults={model.collections.length > 0}/>
-            <ProjectFooter totalProjects={initialLinks.length}/>
-        </>
-    );
+    return <>
+        <SiteHeader projects={initialLinks} onTagSelect={toggleTag} onClearFilters={clearFilters}/>
+        <section className="archive-search" aria-label="Search and browse research">
+            <div className="search-field"><Search aria-hidden/><label className="sr-only" htmlFor="research-search">Search
+                projects, tags, dates, organizations, and metadata</label>
+                <input ref={searchRef} id="research-search" type="search"
+                       placeholder="Search projects, tags, dates, organizations…"
+                       value={state.query}
+                       onChange={(event) => setState((current) => ({...current, query: event.target.value}))}/>
+                {state.query ? <button type="button" onClick={() => commit({...state, query: ""}, "replace")}
+                                       aria-label="Clear search"><X aria-hidden/></button> : <kbd>⌘ K</kbd>}
+            </div>
+            <Image src="/pet.png" alt="" aria-hidden width={58} height={58} priority className="search-pet"/>
+        </section>
+
+        <section className="archive-toolbar" aria-label="Directory controls">
+            <div className="view-switch" role="group" aria-label="Archive view">
+                {(["projects", "timeline"] as const).map((view) => <button key={view} type="button"
+                                                                           aria-pressed={state.view === view}
+                                                                           onClick={() => commit({
+                                                                               ...state,
+                                                                               view
+                                                                           })}>{view === "projects" ? "Projects" : "Timeline"}</button>)}
+            </div>
+            <p className="archive-count">
+                <strong>{filtered.length}</strong><span> of {initialLinks.length} projects · {tagCounts.length} research areas</span>
+            </p>
+            <label className="sort-control"><span>Sort by</span><select value={state.sort} onChange={(event) => commit({
+                ...state,
+                sort: event.target.value as ArchiveState["sort"]
+            })}>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="title-asc">Title (A–Z)</option>
+                <option value="title-desc">Title (Z–A)</option>
+            </select></label>
+            <button type="button" className="filter-button" onClick={() => setFiltersOpen(true)}><Filter
+                aria-hidden/>Filters{filterCount ? <span>{filterCount}</span> : null}</button>
+        </section>
+
+        <div className="quick-filters" aria-label="Quick research area filters">
+            {tagCounts.slice(0, 4).map(([tag]) => <button key={tag} type="button"
+                                                          aria-pressed={state.tags.some((value) => value.toLowerCase() === tag.toLowerCase())}
+                                                          onClick={() => toggleTag(tag)}>{tag}</button>)}
+            {tagCounts.length > 4 ? <button type="button" onClick={() => setFiltersOpen(true)}>More</button> : null}
+        </div>
+
+        {filtersActive ? <div className="active-filters" aria-label="Active filters">
+            {state.tags.map((tag) => <button key={tag} type="button" onClick={() => toggleTag(tag)}>{tag}<X
+                aria-hidden/></button>)}
+            {state.source !== "all" ? <button type="button" onClick={() => commit({
+                ...state,
+                source: "all"
+            })}>{state.source === "orcid" ? "ORCID" : "Manual"}<X aria-hidden/></button> : null}
+            {state.year ?
+                <button type="button" onClick={() => commit({...state, year: null})}>{state.year}<X aria-hidden/>
+                </button> : null}
+            <button type="button" className="clear-filter-link" onClick={clearFilters}>Clear all</button>
+        </div> : null}
+
+        <p className="sr-only" aria-live="polite">{filtered.length} project{filtered.length === 1 ? "" : "s"} shown.</p>
+        <main id="research-archive" className="archive-content">
+            {state.view === "timeline" ? <TimelineView projects={filtered} onTagSelect={toggleTag}/> : <>
+                {model.collections.length ?
+                    <div className="archive-list">{model.collections.map((collection) => <CollectionCard
+                        key={collection.id} {...collection}
+                        projects={collection.members} onTagSelect={toggleTag}/>)}</div> : null}
+                <ProjectList links={model.standalone} isSearching={filtersActive} highlights={highlights}
+                             availability={availability}
+                             hasCollectionResults={model.collections.length > 0} onTagSelect={toggleTag}
+                             onReset={clearFilters}/>
+            </>}
+            {state.view === "timeline" && !filtered.length ?
+                <div className="empty-state"><h2>No matching research</h2><p>Try a broader search or remove a
+                    filter.</p>
+                    <button className="secondary-button" onClick={clearFilters}>Clear search and filters</button>
+                </div> : null}
+        </main>
+        {filtersOpen ?
+            <FilterDrawer open={filtersOpen} onClose={() => setFiltersOpen(false)} state={state} projects={initialLinks}
+                          onApply={(next) => commit(next)} onClear={clearFilters}/> : null}
+    </>;
 }

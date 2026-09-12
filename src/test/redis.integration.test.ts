@@ -62,7 +62,17 @@ suite("Redis-backed project workflow", () => {
                 target: "https://example.org/permanent",
                 permanent: true,
                 title: "Permanent study",
-                tags: ["test"]
+                tags: ["test"],
+                researchAreas: ["Integration biology"],
+                organizations: [{name: "Test Institute", role: "Host", url: null}],
+                artifacts: [{
+                    type: "dataset",
+                    title: "Test data",
+                    url: "https://example.org/data",
+                    date: "2025",
+                    venue: "Repository",
+                    featured: true
+                }]
             }),
         }));
         const temporary = await POST(new NextRequest("http://localhost/api/links", {
@@ -102,6 +112,14 @@ suite("Redis-backed project workflow", () => {
         }).links.find((project) => project.slug === slug);
         expect(publicProject).toBeDefined();
         expect(publicProject).not.toHaveProperty("clicks");
+        expect(publicProject).toMatchObject({
+            researchAreas: ["Integration biology"],
+            organizations: [{name: "Test Institute", role: "Host", url: null}]
+        });
+        const oldPublicProject = ((await GET_DIRECTORY(new NextRequest("http://localhost/api/directory?limit=200")).then((response) => response.json())) as {
+            links: Array<Record<string, unknown>>
+        }).links.find((project) => project.slug === temporarySlug);
+        expect(oldPublicProject).toMatchObject({researchAreas: [], organizations: [], artifacts: []});
 
         const permanentRedirect = await GET_REDIRECT(
             new NextRequest(`http://localhost/${slug}`),

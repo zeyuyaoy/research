@@ -19,29 +19,37 @@ export async function GET(req: NextRequest) {
         const tag = searchParams.get("tag")?.trim().toLowerCase();
         const includeClicks = searchParams.get("includeClicks") !== "false";
         const {projects} = await getDirectorySnapshot({fresh: true});
-        const rows: ExportRow[] = projects
+        const records = projects
             .filter((project) => !source || project.source === source)
             .filter((project) => !tag || project.metadata.tags.some((value) => value.toLowerCase().includes(tag)))
             .sort((a, b) => Date.parse(b.metadata.createdAt) - Date.parse(a.metadata.createdAt))
             .map((project) => ({
                 slug: project.slug,
                 target: project.target,
-                title: project.metadata.title,
-                description: project.metadata.description || "",
-                tags: project.metadata.tags.join(","),
                 source: project.source,
                 ...(includeClicks ? {clicks: project.clicks} : {}),
-                permanent: project.metadata.permanent,
-                startDate: project.metadata.startDate || "",
-                endDate: project.metadata.endDate || "",
-                githubRepo: project.metadata.githubRepo || "",
-                photoSetId: project.metadata.photoSetId || "",
-                createdAt: project.metadata.createdAt,
-                updatedAt: project.metadata.updatedAt || "",
+                ...project.metadata,
             }));
         const date = new Date().toISOString().slice(0, 10);
         if (format === "csv") {
-            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "title", "description", "tags", "source", ...(includeClicks ? ["clicks"] : []), "permanent", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
+            const rows: ExportRow[] = records.map((record) => ({
+                ...record,
+                description: record.description || "",
+                longDescription: record.longDescription || "",
+                tags: record.tags.join(","),
+                researchAreas: record.researchAreas.join(","),
+                technologies: record.technologies.join(","),
+                methods: record.methods.join(","),
+                organizations: JSON.stringify(record.organizations),
+                collaborators: JSON.stringify(record.collaborators),
+                artifacts: JSON.stringify(record.artifacts),
+                startDate: record.startDate || "",
+                endDate: record.endDate || "",
+                githubRepo: record.githubRepo || "",
+                photoSetId: record.photoSetId || "",
+                updatedAt: record.updatedAt || "",
+            }));
+            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "source", ...(includeClicks ? ["clicks"] : []), "permanent", "title", "description", "longDescription", "tags", "researchAreas", "technologies", "methods", "organizations", "collaborators", "artifacts", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
             const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))].join("\n");
             return new NextResponse(csv, {
                 headers: {
@@ -52,7 +60,7 @@ export async function GET(req: NextRequest) {
             });
         }
         if (format === "yaml" || format === "yml") {
-            return new NextResponse(dumpYaml(rows, {noRefs: true, lineWidth: 120}), {
+            return new NextResponse(dumpYaml(records, {noRefs: true, lineWidth: 120}), {
                 headers: {
                     ...PRIVATE_HEADERS,
                     "Content-Type": "application/yaml; charset=utf-8",
@@ -61,9 +69,9 @@ export async function GET(req: NextRequest) {
             });
         }
         return NextResponse.json({
-            export: rows,
+            export: records,
             metadata: {
-                total: rows.length,
+                total: records.length,
                 generatedAt: new Date().toISOString(),
                 format: "json",
                 filters: {source: source || "all", tag: tag || null, includeClicks}

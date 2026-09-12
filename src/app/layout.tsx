@@ -9,8 +9,21 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-    title: "Peter's Research Projects",
+    metadataBase: new URL("https://research.cytronicoder.com"),
+    title: {default: "Peter's Research Projects", template: "%s | Peter's Research"},
     description: "Curated collection of my research work, projects, and publications.",
+    alternates: {canonical: "/"},
+    openGraph: {
+        type: "website", url: "/", siteName: "Peter's Research Projects",
+        title: "Peter's Research Projects", description: "Per aspera ad astra!",
+        images: ["/opengraph-image"],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "Peter's Research Projects",
+        description: "Per aspera ad astra!",
+        images: ["/opengraph-image"]
+    },
     icons: {
         icon: "/favicon-32x32.png",
         apple: "/apple-touch-icon.png",
@@ -22,8 +35,8 @@ export const viewport = {
     width: "device-width",
     initialScale: 1,
     themeColor: [
-        {media: "(prefers-color-scheme: light)", color: "#ffffff"},
-        {media: "(prefers-color-scheme: dark)", color: "#121212"},
+        {media: "(prefers-color-scheme: light)", color: "#f7f5ef"},
+        {media: "(prefers-color-scheme: dark)", color: "#171d1a"},
     ],
 };
 

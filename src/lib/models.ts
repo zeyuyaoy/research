@@ -1,10 +1,38 @@
 export type ProjectSource = "manual" | "orcid";
 
+export const ARTIFACT_TYPES = [
+    "publication", "preprint", "poster", "talk", "presentation", "award", "code", "dataset", "video", "website", "other",
+] as const;
+
+export type ArtifactType = typeof ARTIFACT_TYPES[number];
+
+export interface NamedEntity {
+    name: string;
+    role: string | null;
+    url: string | null;
+}
+
+export interface ProjectArtifact {
+    type: ArtifactType;
+    title: string;
+    url: string | null;
+    date: string | null;
+    venue: string | null;
+    featured: boolean;
+}
+
 export interface ProjectMetadata {
     permanent: boolean;
     title: string;
     description: string | null;
+    longDescription: string | null;
     tags: string[];
+    researchAreas: string[];
+    technologies: string[];
+    methods: string[];
+    organizations: NamedEntity[];
+    collaborators: NamedEntity[];
+    artifacts: ProjectArtifact[];
     createdAt: string;
     updatedAt: string | null;
     startDate: string | null;
@@ -27,7 +55,14 @@ export interface PublicProject {
     shortUrl: string;
     title: string;
     description: string | null;
+    longDescription: string | null;
     tags: string[];
+    researchAreas: string[];
+    technologies: string[];
+    methods: string[];
+    organizations: NamedEntity[];
+    collaborators: NamedEntity[];
+    artifacts: ProjectArtifact[];
     source: ProjectSource;
     createdAt: string;
     updatedAt: string | null;
@@ -65,7 +100,14 @@ export interface ProjectInput {
     permanent?: boolean;
     title?: string;
     description?: string;
+    longDescription?: string;
     tags?: string[];
+    researchAreas?: string[];
+    technologies?: string[];
+    methods?: string[];
+    organizations?: NamedEntity[];
+    collaborators?: NamedEntity[];
+    artifacts?: ProjectArtifact[];
     startDate?: string;
     endDate?: string;
     githubRepo?: string;
@@ -86,6 +128,7 @@ export type ValidationResult<T> =
 
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const DATE_PATTERN = /^\d{4}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
+const ARTIFACT_TYPE_SET = new Set<string>(ARTIFACT_TYPES);
 
 export function normalizeSlug(value: string): string {
     return value.trim().replace(/^\/+/, "").toLowerCase();
@@ -109,6 +152,53 @@ export function normalizeTags(value: unknown): string[] {
                 .filter((tag) => tag.length > 0 && tag.length <= 80),
         ),
     );
+}
+
+function parseJsonArray(value: unknown): unknown[] {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== "string" || !value.trim()) return [];
+    try {
+        const parsed: unknown = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
+}
+
+export function normalizeNamedEntities(value: unknown): NamedEntity[] {
+    const seen = new Set<string>();
+    return parseJsonArray(value).flatMap((item): NamedEntity[] => {
+        if (typeof item === "string") {
+            const name = item.trim().slice(0, 240);
+            const key = name.toLowerCase();
+            if (!name || seen.has(key)) return [];
+            seen.add(key);
+            return [{name, role: null, url: null}];
+        }
+        if (!item || typeof item !== "object") return [];
+        const raw = item as Record<string, unknown>;
+        const name = optionalString(raw.name, 240);
+        const role = optionalString(raw.role, 240) || null;
+        const url = optionalString(raw.url, 2048) || null;
+        const key = name?.toLowerCase() || "";
+        if (!name || seen.has(key) || (url && !isHttpUrl(url))) return [];
+        seen.add(key);
+        return [{name, role, url}];
+    });
+}
+
+export function normalizeArtifacts(value: unknown): ProjectArtifact[] {
+    return parseJsonArray(value).flatMap((item): ProjectArtifact[] => {
+        if (!item || typeof item !== "object") return [];
+        const raw = item as Record<string, unknown>;
+        const type = typeof raw.type === "string" && ARTIFACT_TYPE_SET.has(raw.type) ? raw.type as ArtifactType : "other";
+        const title = optionalString(raw.title, 240);
+        const url = optionalString(raw.url, 2048) || null;
+        const date = optionalString(raw.date, 10) || null;
+        const venue = optionalString(raw.venue, 240) || null;
+        if (!title || (url && !isHttpUrl(url)) || (date && !isValidDate(date))) return [];
+        return [{type, title, url, date, venue, featured: raw.featured === true}];
+    });
 }
 
 export function isHttpUrl(value: string): boolean {
@@ -175,7 +265,14 @@ export function validateProjectInput(value: unknown, requireTarget: boolean): Va
             permanent: raw.permanent as boolean | undefined,
             title: optionalString(raw.title, 240),
             description: optionalString(raw.description, 4000),
+            longDescription: optionalString(raw.longDescription, 20_000),
             tags: raw.tags === undefined ? undefined : normalizeTags(raw.tags),
+            researchAreas: raw.researchAreas === undefined ? undefined : normalizeTags(raw.researchAreas),
+            technologies: raw.technologies === undefined ? undefined : normalizeTags(raw.technologies),
+            methods: raw.methods === undefined ? undefined : normalizeTags(raw.methods),
+            organizations: raw.organizations === undefined ? undefined : normalizeNamedEntities(raw.organizations),
+            collaborators: raw.collaborators === undefined ? undefined : normalizeNamedEntities(raw.collaborators),
+            artifacts: raw.artifacts === undefined ? undefined : normalizeArtifacts(raw.artifacts),
             startDate,
             endDate,
             githubRepo,
@@ -216,7 +313,14 @@ export function parseMetadata(slug: string, meta: Record<string, string>): Proje
         permanent: meta.permanent === "1",
         title: meta.title?.trim() || slug,
         description: meta.description?.trim() || null,
+        longDescription: meta.longDescription?.trim() || null,
         tags: normalizeTags(meta.tags),
+        researchAreas: normalizeTags(parseJsonArray(meta.researchAreas)),
+        technologies: normalizeTags(parseJsonArray(meta.technologies)),
+        methods: normalizeTags(parseJsonArray(meta.methods)),
+        organizations: normalizeNamedEntities(meta.organizations),
+        collaborators: normalizeNamedEntities(meta.collaborators),
+        artifacts: normalizeArtifacts(meta.artifacts),
         createdAt: meta.createdAt || new Date(0).toISOString(),
         updatedAt: meta.updatedAt || null,
         startDate: meta.startDate || null,
@@ -232,7 +336,14 @@ export function serializeProjectMetadata(input: ProjectInput, existing?: Record<
         permanent: input.permanent === undefined ? existing?.permanent || "0" : input.permanent ? "1" : "0",
         title: input.title === undefined ? existing?.title || input.slug : input.title || input.slug,
         description: input.description === undefined ? existing?.description || "" : input.description,
+        longDescription: input.longDescription === undefined ? existing?.longDescription || "" : input.longDescription,
         tags: input.tags === undefined ? existing?.tags || "" : input.tags.join(","),
+        researchAreas: input.researchAreas === undefined ? existing?.researchAreas || "[]" : JSON.stringify(input.researchAreas),
+        technologies: input.technologies === undefined ? existing?.technologies || "[]" : JSON.stringify(input.technologies),
+        methods: input.methods === undefined ? existing?.methods || "[]" : JSON.stringify(input.methods),
+        organizations: input.organizations === undefined ? existing?.organizations || "[]" : JSON.stringify(input.organizations),
+        collaborators: input.collaborators === undefined ? existing?.collaborators || "[]" : JSON.stringify(input.collaborators),
+        artifacts: input.artifacts === undefined ? existing?.artifacts || "[]" : JSON.stringify(input.artifacts),
         startDate: input.startDate === undefined ? existing?.startDate || "" : input.startDate,
         endDate: input.endDate === undefined ? existing?.endDate || "" : input.endDate,
         githubRepo: input.githubRepo === undefined ? existing?.githubRepo || "" : input.githubRepo,
@@ -265,7 +376,14 @@ export function toPublicProject(project: ProjectRecord): PublicProject {
         shortUrl: `/${project.slug}`,
         title: project.metadata.title,
         description: project.metadata.description,
+        longDescription: project.metadata.longDescription,
         tags: project.metadata.tags,
+        researchAreas: project.metadata.researchAreas,
+        technologies: project.metadata.technologies,
+        methods: project.metadata.methods,
+        organizations: project.metadata.organizations,
+        collaborators: project.metadata.collaborators,
+        artifacts: project.metadata.artifacts,
         source: project.source,
         createdAt: project.metadata.createdAt,
         updatedAt: project.metadata.updatedAt,

@@ -20,7 +20,7 @@ curl https://your-site.example/api/auth \
 curl "https://your-site.example/api/directory?tag=genomics&source=manual&limit=20"
 ```
 
-Each project includes `slug`, `target`, `shortUrl`, `title`, `description`, `tags`, `source`, dates, repository URL, and photo-set ID, and timestamps.
+Each project includes `slug`, `target`, `shortUrl`, both descriptions, tags, research areas, technologies, methods, organizations, collaborators, typed artifacts, source, dates, repository URL, photo-set ID, and timestamps.
 
 ### `GET /api/search`
 
@@ -28,7 +28,7 @@ Each project includes `slug`, `target`, `shortUrl`, `title`, `description`, `tag
 curl "https://your-site.example/api/search?q=protein&tag=bioinformatics&source=orcid"
 ```
 
-Results add a numeric `score` and plain-text `highlights` arrays.
+Search matches titles, descriptions, dates, tags and research areas, organizations, collaborators, methods, technologies, artifact metadata/domains, slug, target, and source. `tag` may be repeated or comma-separated and uses case-insensitive match-all semantics. Optional `year`, `source`, `sort` (`newest`, `oldest`, `title-asc`, or `title-desc`), `limit`, and `offset` parameters are supported. Results add a numeric `score` and plain-text `highlights` arrays.
 
 ## Projects
 
@@ -45,7 +45,12 @@ curl -X POST https://your-site.example/api/links \
     "target": "https://example.org/paper",
     "title": "Protein localization study",
     "description": "A concise project summary",
+    "longDescription": "A longer account of the research and its results.",
     "tags": ["bioinformatics", "proteomics"],
+    "researchAreas": ["computational biology"],
+    "methods": ["sequence analysis"],
+    "organizations": [{"name": "Example Institute", "role": "Host", "url": "https://example.org"}],
+    "artifacts": [{"type": "publication", "title": "Paper", "url": "https://doi.org/10.1000/example", "date": "2025", "venue": "Example Journal", "featured": true}],
     "permanent": true,
     "startDate": "2024-06",
     "endDate": "2025",
@@ -122,10 +127,12 @@ curl "https://your-site.example/api/export?format=csv" \
   -o research.csv
 ```
 
-CSV strings that spreadsheet software could interpret as formulas are prefixed with an inert apostrophe. Use JSON for a lossless machine backup.
+CSV strings that spreadsheet software could interpret as formulas are prefixed with an inert apostrophe, lists are comma-flattened, and structured entities/artifacts are JSON-encoded inside their cells. JSON and YAML preserve the structured model losslessly.
 
 ## Redirects and ORCID
 
 `GET /<slug>` increments the all-time count best-effort, sets `noindex` and `no-store`, and returns `308` for permanent projects or `307` otherwise.
 
-When `ORCID_ID` is configured, the homepage imports public works from ORCID’s v3 API. Responses are cached for one hour; malformed works are skipped individually, DOI URLs are normalized safely, and existing Redis metadata is preserved.
+`GET /projects/<slug>` is the canonical, indexable project detail page and does not increment redirect counts.
+
+When `ORCID_ID` is configured, the homepage imports public works from ORCID's v3 API. Responses are cached for one hour; malformed works are skipped individually, DOI URLs are normalized safely, and existing Redis metadata is preserved.

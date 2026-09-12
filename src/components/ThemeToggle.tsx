@@ -3,41 +3,39 @@
 import {Moon, Sun} from "lucide-react";
 import {useEffect, useState} from "react";
 
-export default function ThemeToggle() {
-    const [theme, setTheme] = useState<"light" | "dark">("light");
-    const [mounted, setMounted] = useState(false);
+export function currentTheme(): "light" | "dark" {
+    if (typeof window === "undefined") return "light";
+    const saved = (() => {
+        try {
+            return localStorage.getItem("theme");
+        } catch {
+            return null;
+        }
+    })();
+    return saved === "light" || saved === "dark" ? saved : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
+export function setDocumentTheme(theme: "light" | "dark") {
+    document.documentElement.dataset.theme = theme;
+    try {
+        localStorage.setItem("theme", theme);
+    } catch { /* Optional storage. */
+    }
+    window.dispatchEvent(new CustomEvent("theme-change", {detail: theme}));
+}
+
+export default function ThemeToggle({compact = false}: { compact?: boolean }) {
+    const [theme, setTheme] = useState<"light" | "dark" | null>(null);
     useEffect(() => {
-        let saved: string | null = null;
-        try {
-            saved = localStorage.getItem("theme");
-        } catch { /* Local storage is optional */
-        }
-
-        const initial = saved === "light" || saved === "dark" ? saved : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        const timeout = window.setTimeout(() => {
-            setTheme(initial);
-            document.documentElement.dataset.theme = initial;
-            setMounted(true);
-        }, 0);
-
-        return () => window.clearTimeout(timeout);
+        const sync = () => setTheme(currentTheme());
+        sync();
+        window.addEventListener("theme-change", sync);
+        return () => window.removeEventListener("theme-change", sync);
     }, []);
-
-    const nextTheme = theme === "light" ? "dark" : "light";
-    return <button type="button" disabled={!mounted} onClick={() => {
-        setTheme(nextTheme);
-        try {
-            localStorage.setItem("theme", nextTheme);
-        } catch { /* Local storage is optional */
-        }
-
-        window.dispatchEvent(new CustomEvent("theme-change", {detail: nextTheme}));
-        document.documentElement.dataset.theme = nextTheme;
-    }}
-                   className="rounded-lg border p-3 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-70"
-                   style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    return <button type="button" disabled={!theme} onClick={() => setDocumentTheme(nextTheme)}
+                   className={`icon-button ${compact ? "icon-button-compact" : ""}`}
                    aria-label={`Switch to ${nextTheme} mode`}>
-        {theme === "light" ? <Moon aria-hidden className="h-5 w-5"/> : <Sun aria-hidden className="h-5 w-5"/>}
+        {theme === "dark" ? <Sun aria-hidden/> : <Moon aria-hidden/>}
     </button>;
 }

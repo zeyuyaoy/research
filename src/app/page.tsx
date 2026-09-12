@@ -1,47 +1,59 @@
+import {after} from "next/server";
 import SearchableProjects from "@/components/SearchableProjects";
-import {getPhotoSet, type PhotoSet} from "@/lib/conferenceSlides";
+import {parseArchiveState, toProjectSummary} from "@/lib/archive";
+import {getPhotoSet} from "@/lib/conferenceSlides";
 import {getDirectorySnapshot} from "@/lib/directory";
-import {type CollectionRecord, type PublicProject, toPublicProject} from "@/lib/models";
 import {getOrcidWorks} from "@/lib/orcid";
 import {getRedisUrl} from "@/lib/redis";
+import type {CollectionView, ProjectView} from "@/lib/views";
 
 export const dynamic = "force-dynamic";
 
-export type ProjectView = PublicProject & { photoSet?: PhotoSet };
-export type CollectionView = CollectionRecord & { photoSet?: PhotoSet };
+type SearchParams = Record<string, string | string[] | undefined>;
 
-export default async function Home() {
+function toUrlSearchParams(input: SearchParams) {
+    const params = new URLSearchParams();
+    Object.entries(input).forEach(([key, value]) => {
+        if (Array.isArray(value)) value.forEach((item) => params.append(key, item));
+        else if (value !== undefined) params.set(key, value);
+    });
+    return params;
+}
+
+export default async function Home({searchParams}: { searchParams: Promise<SearchParams> }) {
     let projects: ProjectView[] = [];
     let collections: CollectionView[] = [];
     let availability: "ready" | "unconfigured" | "unavailable" = getRedisUrl() ? "ready" : "unconfigured";
 
     if (availability === "ready") {
         try {
-            const [{projects: storedProjects, collections: storedCollections}, orcidProjects] = await Promise.all([
-                getDirectorySnapshot({fresh: true}),
-                getOrcidWorks(process.env.ORCID_ID || ""),
-            ]);
-            const bySlug = new Map([...storedProjects, ...orcidProjects].map((project) => [project.slug, project]));
-            projects = [...bySlug.values()].map((project) => ({
-                ...toPublicProject(project),
-                photoSet: getPhotoSet(project.metadata.photoSetId || project.slug)
+            const snapshot = await getDirectorySnapshot();
+            projects = snapshot.projects.map((project) => ({
+                ...toProjectSummary(project),
+                photoSet: getPhotoSet(project.metadata.photoSetId || project.slug),
             }));
-            collections = storedCollections.map((collection) => ({
+            collections = snapshot.collections.map((collection) => ({
                 ...collection,
                 photoSet: getPhotoSet(collection.id)
             }));
+
+            const orcidId = process.env.ORCID_ID;
+            if (orcidId) after(async () => {
+                await getOrcidWorks(orcidId);
+            });
         } catch (error) {
             console.error("Unable to load the research directory:", error instanceof Error ? error.message : "unknown error");
             availability = "unavailable";
         }
     }
 
+    const initialState = parseArchiveState(toUrlSearchParams(await searchParams));
     return (
-        <main className="min-h-screen flex justify-center" style={{backgroundColor: "var(--background-color)"}}>
-            <div className="max-w-4xl w-full mx-auto px-4 py-10 sm:px-6 sm:py-16 lg:px-8">
+        <div className="site-shell">
+            <div className="site-container">
                 <SearchableProjects initialLinks={projects} initialCollections={collections}
-                                    availability={availability}/>
+                                    availability={availability} initialState={initialState}/>
             </div>
-        </main>
+        </div>
     );
 }

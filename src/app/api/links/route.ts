@@ -5,6 +5,7 @@ import {
     isValidSlug,
     normalizeSlug,
     normalizeTags,
+    parseMetadata,
     parsePagination,
     serializeProjectMetadata,
     validateProjectInput,
@@ -23,18 +24,7 @@ function responseProject(
         short: `${origin}/${slug}`,
         target,
         clicks,
-        metadata: {
-            permanent: metadata.permanent === "1",
-            title: metadata.title || slug,
-            description: metadata.description || null,
-            tags: normalizeTags(metadata.tags),
-            createdAt: metadata.createdAt || null,
-            updatedAt: metadata.updatedAt || null,
-            startDate: metadata.startDate || null,
-            endDate: metadata.endDate || null,
-            githubRepo: metadata.githubRepo || null,
-            photoSetId: metadata.photoSetId || null,
-        },
+        metadata: parseMetadata(slug, metadata),
     };
 }
 

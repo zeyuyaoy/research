@@ -4,6 +4,7 @@ import {
     isHttpUrl,
     isValidDate,
     normalizeTags,
+    parseMetadata,
     parsePagination,
     serializeProjectMetadata,
     validateCollectionInput,
@@ -36,6 +37,33 @@ describe("project validation", () => {
         expect(isValidDate("2025-07")).toBe(true);
         expect(formatResearchDate("2025-07")).toBe("Jul 2025");
         expect(formatResearchDate("2025")).toBe("2025");
+    });
+
+    it("round-trips structured optional metadata and tolerates malformed stored JSON", () => {
+        const parsed = validateProjectInput({
+            slug: "study", target: "https://example.org", researchAreas: ["Genomics"],
+            organizations: [{name: "Institute", role: "Host", url: "https://example.org/institute"}],
+            artifacts: [{
+                type: "dataset",
+                title: "Data",
+                url: "https://example.org/data",
+                date: "2025",
+                venue: "Zenodo",
+                featured: true
+            }]
+        }, true);
+        expect(parsed.success).toBe(true);
+        if (!parsed.success) return;
+        const stored = serializeProjectMetadata(parsed.data);
+        expect(parseMetadata("study", stored)).toEqual(expect.objectContaining({
+            researchAreas: ["Genomics"],
+            organizations: [expect.objectContaining({name: "Institute"})],
+            artifacts: [expect.objectContaining({type: "dataset", featured: true})]
+        }));
+        expect(parseMetadata("old-record", {
+            researchAreas: "not-json",
+            artifacts: "{}"
+        })).toEqual(expect.objectContaining({researchAreas: [], artifacts: [], organizations: []}));
     });
 });
 

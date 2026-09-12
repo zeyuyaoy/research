@@ -4,8 +4,8 @@ This app allows you to organize research projects with tags, descriptions, and l
 
 ### Features
 
-- Search, source filters, tags, research-date sorting, collections, light/dark themes, and responsive layouts
-- Accessible project sharing, collection disclosures, and conference carousels
+- Instant metadata-aware search, shareable URL filters, four-way sorting, project/timeline views, and light/dark themes
+- Keyboard command palette, canonical project details, related research, project sharing, collection disclosures, and conference carousels
 - Redis-backed project, collection, metadata, and click records
 - Optional cached ORCID import with per-record validation and safe DOI fallbacks
 - Shared-key admin dashboard with project and collection CRUD, ordering, pagination, exports, and all-time analytics
@@ -40,11 +40,11 @@ Open the local site at `http://localhost:3000`; the dashboard is at `/admin`.
 ### Data model
 
 - `link:<slug>` — canonical HTTP(S) target
-- `meta:<slug>` — hash containing `title`, `description`, comma-separated `tags`, `permanent`, `createdAt`, `updatedAt`, `startDate`, `endDate`, `githubRepo`, and optional `photoSetId`
+- `meta:<slug>` — hash containing the core title, descriptions, comma-separated legacy `tags`, redirect/date/repository/photo fields, plus JSON arrays for `researchAreas`, `technologies`, `methods`, `organizations`, `collaborators`, and typed `artifacts`
 - `count:<slug>` — all-time successful redirect count
 - `collection:<id>` — hash containing `name`, `description`, comma-separated ordered `projects`, comma-separated `tags`, and timestamps
 
-Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Deleting a project also removes its slug from collections. Photo sets are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug.
+Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Structured fields are optional and malformed stored JSON safely normalizes to empty arrays, so older records need no migration. Deleting a project also removes its slug from collections. Photo sets are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug. Canonical detail pages live at `/projects/<slug>` while `/<slug>` remains the counted external redirect.
 
 ORCID responses are cached for one hour.
 

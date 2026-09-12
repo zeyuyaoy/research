@@ -1,11 +1,20 @@
 "use client";
 
 import {FormEvent, useCallback, useEffect, useMemo, useState} from "react";
-import type {AnalyticsSummary, CollectionRecord, ProjectRecord} from "@/lib/models";
+import {
+    type AnalyticsSummary,
+    ARTIFACT_TYPES,
+    type CollectionRecord,
+    type NamedEntity,
+    type ProjectArtifact,
+    type ProjectRecord
+} from "@/lib/models";
 
 type Tab = "projects" | "collections" | "analytics";
 type ProjectForm = {
-    slug: string; target: string; title: string; description: string; tags: string;
+    slug: string; target: string; title: string; description: string; longDescription: string; tags: string;
+    researchAreas: string[]; technologies: string[]; methods: string[];
+    organizations: NamedEntity[]; collaborators: NamedEntity[]; artifacts: ProjectArtifact[];
     permanent: boolean; startDate: string; endDate: string; githubRepo: string; photoSetId: string;
 };
 type CollectionForm = { id: string; name: string; description: string; tags: string; projects: string[] };
@@ -15,7 +24,14 @@ const EMPTY_PROJECT: ProjectForm = {
     target: "",
     title: "",
     description: "",
+    longDescription: "",
     tags: "",
+    researchAreas: [],
+    technologies: [],
+    methods: [],
+    organizations: [],
+    collaborators: [],
+    artifacts: [],
     permanent: false,
     startDate: "",
     endDate: "",
@@ -67,6 +83,98 @@ function TextField({label, value, onChange, required, type = "text", placeholder
         style={{backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)"}}/></label>;
 }
 
+function ListEditor({label, values, onChange, placeholder}: {
+    label: string;
+    values: string[];
+    onChange: (values: string[]) => void;
+    placeholder: string
+}) {
+    return <fieldset className="grid gap-2 rounded-lg border p-3" style={{borderColor: "var(--card-border)"}}>
+        <legend className="px-1 text-sm font-semibold">{label}</legend>
+        {values.map((value, index) => <div key={index} className="flex gap-2"><label className="sr-only"
+                                                                                     htmlFor={`${label}-${index}`}>{label} {index + 1}</label><input
+            id={`${label}-${index}`} value={value}
+            onChange={(event) => onChange(values.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
+            placeholder={placeholder}
+            className="min-w-0 flex-1 rounded-lg border px-3 py-2"
+            style={{backgroundColor: "var(--input-bg)", borderColor: "var(--input-border)"}}/>
+            <button type="button" aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}
+                    onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+                    className="rounded-lg border px-3">Remove
+            </button>
+        </div>)}
+        <button type="button" onClick={() => onChange([...values, ""])}
+                className="justify-self-start rounded-lg border px-3 py-2 text-sm font-semibold">Add {label.toLowerCase().replace(/s$/, "")}</button>
+    </fieldset>;
+}
+
+function EntityEditor({label, values, onChange}: {
+    label: string;
+    values: NamedEntity[];
+    onChange: (values: NamedEntity[]) => void
+}) {
+    const update = (index: number, patch: Partial<NamedEntity>) => onChange(values.map((item, itemIndex) => itemIndex === index ? {...item, ...patch} : item));
+    return <fieldset className="grid gap-3 rounded-lg border p-3" style={{borderColor: "var(--card-border)"}}>
+        <legend className="px-1 text-sm font-semibold">{label}</legend>
+        {values.map((item, index) => <div key={index} className="grid gap-2 rounded-lg border p-3 md:grid-cols-3"
+                                          style={{borderColor: "var(--card-border)"}}>
+            <TextField label="Name" value={item.name} onChange={(name) => update(index, {name})}/><TextField
+            label="Role" value={item.role || ""} onChange={(role) => update(index, {role: role || null})}/><TextField
+            label="URL" type="url" value={item.url || ""} onChange={(url) => update(index, {url: url || null})}/>
+            <button type="button" aria-label={`Remove ${label.toLowerCase()} entry ${index + 1}`}
+                    onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+                    className="justify-self-start rounded-lg border px-3 py-2 text-sm">Remove
+            </button>
+        </div>)}
+        <button type="button" onClick={() => onChange([...values, {name: "", role: null, url: null}])}
+                className="justify-self-start rounded-lg border px-3 py-2 text-sm font-semibold">Add {label.toLowerCase().replace(/s$/, "")}</button>
+    </fieldset>;
+}
+
+function ArtifactEditor({values, onChange}: {
+    values: ProjectArtifact[];
+    onChange: (values: ProjectArtifact[]) => void
+}) {
+    const update = (index: number, patch: Partial<ProjectArtifact>) => onChange(values.map((item, itemIndex) => itemIndex === index ? {...item, ...patch} : item));
+    return <fieldset className="grid gap-3 rounded-lg border p-3" style={{borderColor: "var(--card-border)"}}>
+        <legend className="px-1 text-sm font-semibold">Research artifacts</legend>
+        {values.map((item, index) => <div key={index} className="grid gap-2 rounded-lg border p-3 md:grid-cols-2"
+                                          style={{borderColor: "var(--card-border)"}}>
+            <label className="grid gap-1 text-sm font-semibold">Type<select value={item.type}
+                                                                            onChange={(event) => update(index, {type: event.target.value as ProjectArtifact["type"]})}
+                                                                            className="rounded-lg border px-3 py-2 font-normal"
+                                                                            style={{
+                                                                                backgroundColor: "var(--input-bg)",
+                                                                                borderColor: "var(--input-border)"
+                                                                            }}>{ARTIFACT_TYPES.map((type) => <option
+                key={type}>{type}</option>)}</select></label>
+            <TextField label="Title" value={item.title} onChange={(title) => update(index, {title})}/><TextField
+            label="URL" type="url" value={item.url || ""}
+            onChange={(url) => update(index, {url: url || null})}/><TextField label="Date" value={item.date || ""}
+                                                                              onChange={(date) => update(index, {date: date || null})}
+                                                                              placeholder="YYYY or YYYY-MM-DD"/><TextField
+            label="Venue" value={item.venue || ""} onChange={(venue) => update(index, {venue: venue || null})}/>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox"
+                                                                                    checked={item.featured}
+                                                                                    onChange={(event) => update(index, {featured: event.target.checked})}/>Featured
+                on archive card</label>
+            <button type="button" aria-label={`Remove artifact ${index + 1}`}
+                    onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
+                    className="justify-self-start rounded-lg border px-3 py-2 text-sm">Remove
+            </button>
+        </div>)}
+        <button type="button" onClick={() => onChange([...values, {
+            type: "publication",
+            title: "",
+            url: null,
+            date: null,
+            venue: null,
+            featured: false
+        }])} className="justify-self-start rounded-lg border px-3 py-2 text-sm font-semibold">Add artifact
+        </button>
+    </fieldset>;
+}
+
 type ProjectEditorProps = {
     initial: ProjectForm;
     editing: boolean;
@@ -108,8 +216,28 @@ function ProjectEditorState({initial, editing, onCancel, onSave, busy}: ProjectE
                                                                                                   backgroundColor: "var(--input-bg)",
                                                                                                   borderColor: "var(--input-border)"
                                                                                               }}/></label>
+        <label className="grid gap-1 text-sm font-semibold"><span>Long description</span><textarea rows={8}
+                                                                                                   value={form.longDescription}
+                                                                                                   onChange={(event) => field("longDescription", event.target.value)}
+                                                                                                   className="rounded-lg border px-3 py-2.5 font-normal"
+                                                                                                   style={{
+                                                                                                       backgroundColor: "var(--input-bg)",
+                                                                                                       borderColor: "var(--input-border)"
+                                                                                                   }}/></label>
         <TextField label="Tags" value={form.tags} onChange={(value) => field("tags", value)}
                    placeholder="bioinformatics, software"/>
+        <div className="grid gap-4 md:grid-cols-3"><ListEditor label="Research areas" values={form.researchAreas}
+                                                               onChange={(value) => field("researchAreas", value)}
+                                                               placeholder="Computational biology"/>
+            <ListEditor label="Technologies" values={form.technologies}
+                        onChange={(value) => field("technologies", value)} placeholder="Python"/>
+            <ListEditor label="Methods" values={form.methods} onChange={(value) => field("methods", value)}
+                        placeholder="Machine learning"/></div>
+        <EntityEditor label="Organizations" values={form.organizations}
+                      onChange={(value) => field("organizations", value)}/>
+        <EntityEditor label="Collaborators" values={form.collaborators}
+                      onChange={(value) => field("collaborators", value)}/>
+        <ArtifactEditor values={form.artifacts} onChange={(value) => field("artifacts", value)}/>
         <div className="grid gap-4 md:grid-cols-2"><TextField label="Start date" value={form.startDate}
                                                               onChange={(value) => field("startDate", value)}
                                                               placeholder="YYYY, YYYY-MM, or YYYY-MM-DD"/><TextField
@@ -352,7 +480,16 @@ export default function AdminPage() {
         try {
             await request("/api/links", {
                 method: editing ? "PUT" : "POST",
-                body: JSON.stringify({...form, tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean)})
+                body: JSON.stringify({
+                    ...form,
+                    tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+                    researchAreas: form.researchAreas.filter((item) => item.trim()),
+                    technologies: form.technologies.filter((item) => item.trim()),
+                    methods: form.methods.filter((item) => item.trim()),
+                    organizations: form.organizations.filter((item) => item.name.trim()),
+                    collaborators: form.collaborators.filter((item) => item.name.trim()),
+                    artifacts: form.artifacts.filter((item) => item.title.trim())
+                })
             });
             setProjectForm(null);
             setNotice(editing ? "Project updated." : "Project created.");
@@ -416,7 +553,7 @@ export default function AdminPage() {
         <form onSubmit={login} className="grid w-full max-w-sm gap-4 rounded-xl border p-6 shadow-lg"
               style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
             <div><h1 className="text-2xl font-bold">Research admin</h1><p className="text-sm opacity-65">Use the
-                deployment’s shared administrator key.</p></div>
+                deployment's shared administrator key.</p></div>
             <TextField label="Admin key" value={adminKey} onChange={setAdminKey} required type="password"/>{error ?
             <p role="alert" className="rounded-lg border p-3 text-sm" style={{
                 color: "var(--error-text)",
@@ -499,7 +636,14 @@ export default function AdminPage() {
                                     target: project.target,
                                     title: project.metadata.title,
                                     description: project.metadata.description || "",
+                                    longDescription: project.metadata.longDescription || "",
                                     tags: project.metadata.tags.join(", "),
+                                    researchAreas: project.metadata.researchAreas,
+                                    technologies: project.metadata.technologies,
+                                    methods: project.metadata.methods,
+                                    organizations: project.metadata.organizations,
+                                    collaborators: project.metadata.collaborators,
+                                    artifacts: project.metadata.artifacts,
                                     permanent: project.metadata.permanent,
                                     startDate: project.metadata.startDate || "",
                                     endDate: project.metadata.endDate || "",

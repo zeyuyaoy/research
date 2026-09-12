@@ -1,8 +1,18 @@
 import {invalidateDirectoryCache} from "./directory";
-import {isHttpUrl, ProjectRecord, projectSource} from "./models";
+import {isHttpUrl, parseMetadata, ProjectRecord, projectSource} from "./models";
 import {getRedisClient} from "./redis";
 
 type JsonRecord = Record<string, unknown>;
+
+export interface NormalizedOrcidWork {
+    slug: string;
+    title: string;
+    description: string | null;
+    tags: string[];
+    year: string | null;
+    target: string;
+}
+
 const ORCID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
 
 function record(value: unknown): JsonRecord | null {
@@ -36,6 +46,26 @@ function targetForWork(work: JsonRecord, orcidId: string): string {
     return supplied && isHttpUrl(supplied) ? supplied : `https://orcid.org/${orcidId}`;
 }
 
+export function normalizeOrcidWorks(value: unknown, orcidId: string): NormalizedOrcidWork[] {
+    const groups = record(value)?.group;
+    if (!Array.isArray(groups)) return [];
+    return groups.flatMap((group): NormalizedOrcidWork[] => {
+        const summaries = record(group)?.["work-summary"];
+        if (!Array.isArray(summaries) || !summaries.length) return [];
+        const work = record(summaries[0]);
+        if (!work || (typeof work["put-code"] !== "number" && typeof work["put-code"] !== "string")) return [];
+        const title = nestedString(work, ["title", "title", "value"]);
+        if (!title) return [];
+        const journal = nestedString(work, ["journal-title", "value"]);
+        const description = typeof work["short-description"] === "string" ? work["short-description"].trim() || journal : journal;
+        const year = nestedString(work, ["publication-date", "year", "value"]);
+        return [{
+            slug: `orcid-${work["put-code"]}`, title, description, tags: journal ? [journal] : [],
+            year: year && /^\d{4}$/.test(year) ? year : null, target: targetForWork(work, orcidId)
+        }];
+    });
+}
+
 export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
     if (!ORCID_PATTERN.test(orcidId)) return [];
     try {
@@ -45,36 +75,7 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
             next: {revalidate: 3_600},
         });
         if (!response.ok) return [];
-        const payload = record(await response.json());
-        const groups = payload?.group;
-        if (!Array.isArray(groups)) return [];
-
-        const incoming = groups.flatMap((group): Array<{
-            slug: string;
-            title: string;
-            description: string | null;
-            tags: string[];
-            year: string | null;
-            target: string
-        }> => {
-            const summaries = record(group)?.["work-summary"];
-            if (!Array.isArray(summaries) || !summaries.length) return [];
-            const work = record(summaries[0]);
-            if (!work || (typeof work["put-code"] !== "number" && typeof work["put-code"] !== "string")) return [];
-            const title = nestedString(work, ["title", "title", "value"]);
-            if (!title) return [];
-            const journal = nestedString(work, ["journal-title", "value"]);
-            const description = typeof work["short-description"] === "string" ? work["short-description"].trim() || journal : journal;
-            const year = nestedString(work, ["publication-date", "year", "value"]);
-            return [{
-                slug: `orcid-${work["put-code"]}`,
-                title,
-                description,
-                tags: journal ? [journal] : [],
-                year: year && /^\d{4}$/.test(year) ? year : null,
-                target: targetForWork(work, orcidId),
-            }];
-        });
+        const incoming = normalizeOrcidWorks(await response.json(), orcidId);
         if (!incoming.length) return [];
 
         const redis = await getRedisClient();
@@ -105,7 +106,21 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
                     permanent: "0",
                     title: work.title,
                     description: work.description || "",
+                    longDescription: "",
                     tags: work.tags.join(","),
+                    researchAreas: "[]",
+                    technologies: "[]",
+                    methods: "[]",
+                    organizations: "[]",
+                    collaborators: "[]",
+                    artifacts: JSON.stringify([{
+                        type: work.target.startsWith("https://doi.org/") ? "publication" : "website",
+                        title: work.title,
+                        url: work.target,
+                        date: work.year,
+                        venue: work.tags[0] || null,
+                        featured: true,
+                    }]),
                     createdAt,
                     updatedAt: "",
                     startDate: work.year || "",
@@ -115,22 +130,28 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
                 });
                 writeCount++;
             }
+            const parsed = parseMetadata(work.slug, meta || {});
             return {
                 slug: work.slug,
                 target: target || work.target,
                 clicks: Number(clicks || 0),
                 source: projectSource(work.slug),
                 metadata: {
-                    permanent: meta?.permanent === "1",
+                    ...parsed,
                     title: meta?.title || work.title,
                     description: meta?.description || work.description,
-                    tags: meta?.tags ? meta.tags.split(",").filter(Boolean) : work.tags,
+                    tags: meta?.tags ? parsed.tags : work.tags,
+                    artifacts: parsed.artifacts.length ? parsed.artifacts : [{
+                        type: work.target.startsWith("https://doi.org/") ? "publication" : "website",
+                        title: work.title,
+                        url: work.target,
+                        date: work.year,
+                        venue: work.tags[0] || null,
+                        featured: true,
+                    }],
                     createdAt,
-                    updatedAt: meta?.updatedAt || null,
                     startDate: meta?.startDate || work.year,
                     endDate: meta?.endDate || work.year,
-                    githubRepo: meta?.githubRepo || null,
-                    photoSetId: meta?.photoSetId || null,
                 },
             };
         });
