@@ -65,21 +65,21 @@ export default function ConferenceCarousel({slides, caption, hideCaption = false
                     className="absolute bottom-4 left-4 max-w-[70%] rounded bg-black/70 px-3 py-1 text-sm text-white">{slides[index].caption}</div> : null}
                 {hasMultiple ? <>
                     <button type="button" onClick={previous}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            className="carousel-control absolute left-2 top-1/2 -translate-y-1/2 rounded-full"
                             aria-label="Previous slide"><ChevronLeft aria-hidden/></button>
                     <button type="button" onClick={next}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-2 text-white hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            className="carousel-control absolute right-2 top-1/2 -translate-y-1/2 rounded-full"
                             aria-label="Next slide"><ChevronRight aria-hidden/></button>
                     <button type="button" onClick={() => setManualPaused((value) => !value)}
-                            className="absolute right-3 top-3 rounded-full bg-black/55 p-2 text-white hover:bg-black/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                            className="carousel-control absolute right-3 top-3 rounded-full"
                             aria-label={manualPaused ? "Resume slideshow" : "Pause slideshow"}>{manualPaused ?
-                        <Play aria-hidden className="h-4 w-4"/> : <Pause aria-hidden className="h-4 w-4"/>}</button>
+                        <Play aria-hidden/> : <Pause aria-hidden/>}</button>
                     <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-2"
                          aria-label={`Slide ${index + 1} of ${slides.length}`}>{slides.map((slide, slideIndex) =>
                         <button key={slide.src} type="button" aria-label={`Show slide ${slideIndex + 1}`}
                                 aria-current={slideIndex === index ? "true" : undefined}
                                 onClick={() => setIndex(slideIndex)}
-                                className={`h-3 w-3 rounded-full ring-1 ring-black/20 ${slideIndex === index ? "bg-white" : "bg-white/60"}`}/>)}</div>
+                                className="carousel-dot"/>)}</div>
                 </> : null}
             </div>
         </section>

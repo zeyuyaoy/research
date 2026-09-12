@@ -553,7 +553,7 @@ export default function AdminPage() {
         <form onSubmit={login} className="grid w-full max-w-sm gap-4 rounded-xl border p-6 shadow-lg"
               style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
             <div><h1 className="text-2xl font-bold">Research admin</h1><p className="text-sm opacity-65">Use the
-                deployment's shared administrator key.</p></div>
+                deployment&apos;s shared administrator key.</p></div>
             <TextField label="Admin key" value={adminKey} onChange={setAdminKey} required type="password"/>{error ?
             <p role="alert" className="rounded-lg border p-3 text-sm" style={{
                 color: "var(--error-text)",

@@ -17,6 +17,9 @@
     --card-bg: #fdfcf8;
     --card-raised: #fffefb;
     --card-border: #dce1dc;
+    --collection-bg: #f3f7f3;
+    --collection-border: #a9bfb2;
+    --collection-accent: #d9e7de;
     --line: #cbd3cc;
     --input-bg: #fffefb;
     --input-border: #bec8c0;
@@ -31,6 +34,12 @@
     --focus: #1b6b51;
     --shadow: 0 14px 40px rgba(35, 50, 41, .08);
     --radius: 12px;
+    --carousel-control-bg: rgba(43, 79, 64, .88);
+    --carousel-control-hover: rgba(35, 67, 54, .96);
+    --carousel-control-text: #fff;
+    --carousel-control-border: rgba(255, 255, 255, .32);
+    --carousel-dot: rgba(255, 255, 255, .62);
+    --carousel-dot-active: #fff;
 }
 
 [data-theme="dark"] {
@@ -48,6 +57,9 @@
     --card-bg: #1d2521;
     --card-raised: #222c27;
     --card-border: #34423a;
+    --collection-bg: #202b25;
+    --collection-border: #587264;
+    --collection-accent: #30463a;
     --line: #415047;
     --input-bg: #202923;
     --input-border: #48584e;
@@ -88,6 +100,9 @@
         --card-bg: #1d2521;
         --card-raised: #222c27;
         --card-border: #34423a;
+        --collection-bg: #202b25;
+        --collection-border: #587264;
+        --collection-accent: #30463a;
         --line: #415047;
         --input-bg: #202923;
         --input-border: #48584e;
@@ -254,9 +269,8 @@ button {
 
 .archive-search {
     display: grid;
-    grid-template-columns:minmax(0, 850px) 58px;
+    grid-template-columns:minmax(0, 1fr) 58px;
     align-items: center;
-    justify-content: space-between;
     gap: 32px;
     padding: 34px 0 26px;
 }
@@ -347,6 +361,7 @@ button {
 }
 
 .view-switch {
+    min-height: 44px;
     padding: 3px;
     display: flex;
     border: 1px solid var(--card-border);
@@ -392,7 +407,7 @@ button {
 }
 
 .sort-control select, .filter-year select {
-    min-height: 40px;
+    min-height: 44px;
     border: 1px solid var(--input-border);
     border-radius: 8px;
     padding: 0 32px 0 10px;
@@ -401,7 +416,7 @@ button {
 }
 
 .filter-button {
-    min-height: 42px;
+    min-height: 44px;
     padding: 0 14px;
     display: flex;
     align-items: center;
@@ -556,7 +571,7 @@ button {
     border-radius: var(--radius);
     background: var(--card-bg);
     box-shadow: 0 5px 20px rgba(34, 51, 41, .035);
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    transition: box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
 }
 
 .project-card {
@@ -565,8 +580,7 @@ button {
 
 .project-card:hover, .project-card:focus-within {
     border-color: color-mix(in srgb, var(--primary-color) 46%, var(--card-border));
-    box-shadow: var(--shadow);
-    transform: translateY(-2px);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-color) 18%, transparent), var(--shadow);
 }
 
 .project-card-heading {
@@ -773,7 +787,14 @@ mark {
 
 .collection-card {
     padding: 27px;
-    border-color: color-mix(in srgb, var(--primary-color) 35%, var(--card-border));
+    border-color: var(--collection-border);
+    background: var(--collection-bg);
+    box-shadow: inset 0 3px 0 var(--collection-accent), 0 7px 24px rgba(34, 51, 41, .05);
+}
+
+.collection-card .tag-row button {
+    border-color: color-mix(in srgb, var(--collection-border) 72%, var(--card-border));
+    background: color-mix(in srgb, var(--collection-accent) 62%, var(--collection-bg));
 }
 
 .collection-top {
@@ -808,7 +829,7 @@ mark {
 .collection-desktop-outputs {
     margin-top: 22px;
     padding-top: 18px;
-    border-top: 1px solid var(--card-border);
+    border-top: 1px solid var(--collection-border);
 }
 
 .collection-desktop-outputs h3 {
@@ -837,7 +858,7 @@ mark {
 }
 
 .collection-output-grid a:hover {
-    background: var(--hover-bg);
+    background: var(--collection-accent);
     color: var(--primary-color);
 }
 
@@ -1468,19 +1489,19 @@ dialog::backdrop {
 }
 
 .related-research {
-    margin-top: 72px;
-    padding-top: 35px;
+    margin-top: 64px;
+    padding-top: 30px;
     border-top: 1px solid var(--card-border);
 }
 
 .related-research > div:first-child {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
+    display: grid;
+    gap: 6px;
+    margin-bottom: 20px;
 }
 
-.related-research h2 {
-    margin-top: 6px;
+.related-research .section-kicker, .related-research h2 {
+    margin: 0;
 }
 
 .related-grid {
@@ -1536,6 +1557,64 @@ dialog::backdrop {
 
 .related-grid svg {
     width: 13px;
+}
+
+.carousel-control {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--carousel-control-border);
+    background: var(--carousel-control-bg);
+    color: var(--carousel-control-text);
+    box-shadow: 0 5px 16px rgba(11, 27, 20, .2);
+    backdrop-filter: blur(5px);
+    cursor: pointer;
+    transition: background-color .15s ease, box-shadow .15s ease;
+}
+
+.carousel-control:hover {
+    background: var(--carousel-control-hover);
+    box-shadow: 0 6px 18px rgba(11, 27, 20, .28);
+}
+
+.carousel-control:focus-visible {
+    outline: 3px solid var(--carousel-control-text);
+    outline-offset: 2px;
+}
+
+.carousel-control svg {
+    width: 21px;
+    height: 21px;
+}
+
+.carousel-dot {
+    position: relative;
+    width: 24px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.carousel-dot::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 11px;
+    height: 11px;
+    border: 1px solid rgba(28, 45, 37, .24);
+    border-radius: 50%;
+    background: var(--carousel-dot);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+    transform: translate(-50%, -50%);
+}
+
+.carousel-dot[aria-current="true"]::after {
+    background: var(--carousel-dot-active);
+    box-shadow: 0 0 0 2px rgba(43, 79, 64, .62), 0 1px 4px rgba(0, 0, 0, .2);
 }
 
 .loading-shell {
@@ -1650,6 +1729,8 @@ dialog::backdrop {
     .view-switch {
         grid-column: 1 / -1;
         justify-self: start;
+        height: 44px;
+        padding: 0;
     }
 
     .archive-count {
@@ -1789,7 +1870,7 @@ dialog::backdrop {
     .collection-mobile-outputs {
         display: block;
         margin-top: 18px;
-        border-top: 1px solid var(--card-border);
+        border-top: 1px solid var(--collection-border);
     }
 
     .collection-mobile-outputs summary {
@@ -1982,7 +2063,8 @@ dialog::backdrop {
     }
 
     .related-research {
-        margin-top: 50px;
+        margin-top: 44px;
+        padding-top: 24px;
     }
 
     .skeleton-card {
