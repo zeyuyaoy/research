@@ -1,5 +1,6 @@
 import {ImageResponse} from "next/og";
 import {getProject} from "@/lib/directory";
+import {researchHostname} from "@/lib/site";
 
 export const size = {width: 1200, height: 630};
 export const contentType = "image/png";
@@ -43,6 +44,6 @@ export default async function Image({params}: { params: Promise<{ slug: string }
                 lineHeight: 1.4
             }}>{description}</div>
         </div>
-        <div style={{display: "flex", fontSize: 24, color: "#47705f"}}>research.cytronicoder.com</div>
+        <div style={{display: "flex", fontSize: 24, color: "#47705f"}}>{researchHostname}</div>
     </div>, size);
 }

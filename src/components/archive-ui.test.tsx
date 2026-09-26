@@ -37,7 +37,9 @@ describe("archive interactions", () => {
         window.history.replaceState({}, "", "/");
         const {container} = render(<SearchableProjects initialLinks={projects} availability="ready"
                                                        initialState={DEFAULT_ARCHIVE_STATE}/>);
-        expect(within(container).getByRole("link", {name: /Portfolio/})).toHaveAttribute("href", "https://cytronicoder.com");
+        expect(within(container).getByRole("link", {name: /Portfolio/})).toHaveAttribute("href", "https://zeyuyaoy.com");
+        expect(within(container).getByRole("link", {name: /GitHub/})).toHaveAttribute("href", "https://github.com/zeyuyaoy");
+        expect(within(container).getByRole("link", {name: /Resume/})).toHaveAttribute("href", "https://zeyuyaoy.com/resume");
         expect(container.querySelector("footer.site-footer")).toBeNull();
         fireEvent.keyDown(document, {key: "/"});
         const input = within(container).getByRole("searchbox");

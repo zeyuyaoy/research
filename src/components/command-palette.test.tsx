@@ -26,6 +26,24 @@ const project: ProjectSummary = {
 };
 
 describe("command palette", () => {
+    it.each([
+        ["Portfolio", "https://zeyuyaoy.com"],
+        ["GitHub", "https://github.com/zeyuyaoy"],
+        ["Resume", "https://zeyuyaoy.com/resume"],
+    ])("opens the configured %s destination", (label, url) => {
+        HTMLDialogElement.prototype.showModal = function () {
+            this.setAttribute("open", "");
+        };
+        HTMLDialogElement.prototype.close = function () {
+            this.removeAttribute("open");
+        };
+        const open = vi.spyOn(window, "open").mockImplementation(() => null);
+        render(<CommandPalette open onClose={vi.fn()} projects={[]}/>);
+        fireEvent.click(screen.getByRole("option", {name: label}));
+        expect(open).toHaveBeenCalledWith(url, "_blank", "noopener,noreferrer");
+        open.mockRestore();
+    });
+
     it("supports keyboard selection and restores focus on Escape", async () => {
         HTMLDialogElement.prototype.showModal = function () {
             this.setAttribute("open", "");

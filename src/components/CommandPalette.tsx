@@ -5,6 +5,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
 import {compareProjectSummaries, type ProjectSummary} from "@/lib/archive";
 import {currentTheme, setDocumentTheme} from "./ThemeToggle";
+import {site} from "@/lib/site";
 
 type PaletteItem = {
     id: string;
@@ -16,9 +17,9 @@ type PaletteItem = {
 };
 
 const EXTERNAL_LINKS = [
-    {label: "Resume", href: "https://cytronicoder.com/resume"},
-    {label: "GitHub", href: "https://github.com/cytronicoder"},
-    {label: "Portfolio", href: "https://cytronicoder.com"},
+    {label: "Resume", href: site.resumeUrl},
+    {label: "GitHub", href: site.githubUrl},
+    {label: "Portfolio", href: site.portfolioUrl},
 ];
 
 export default function CommandPalette({open, onClose, projects, onTagSelect, onClearFilters}: {

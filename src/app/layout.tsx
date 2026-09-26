@@ -2,6 +2,7 @@ import type {Metadata} from "next";
 import {Nunito} from "next/font/google";
 import "./globals.css";
 import {Analytics} from "@vercel/analytics/next";
+import {site} from "@/lib/site";
 
 const nunito = Nunito({
     variable: "--font-nunito",
@@ -9,7 +10,7 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-    metadataBase: new URL("https://research.cytronicoder.com"),
+    metadataBase: new URL(site.url),
     title: {default: "Peter's Research Projects", template: "%s | Peter's Research"},
     description: "Curated collection of my research work, projects, and publications.",
     alternates: {canonical: "/"},

@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import {useCallback, useEffect, useState} from "react";
 import type {ProjectSummary} from "@/lib/archive";
+import {site} from "@/lib/site";
 import ThemeToggle from "./ThemeToggle";
 
 const CommandPalette = dynamic(() => import("./CommandPalette"));
@@ -30,11 +31,11 @@ export default function SiteHeader({projects, onTagSelect, onClearFilters}: {
         <header className="site-header">
             <Link className="site-brand" href="/"><strong>Peter&#39;s Research Projects</strong><span>Per aspera ad astra!</span></Link>
             <nav aria-label="Primary navigation">
-                <a href="https://cytronicoder.com/resume" target="_blank" rel="noopener noreferrer"><FileText
+                <a href={site.resumeUrl} target="_blank" rel="noopener noreferrer"><FileText
                     aria-hidden/>Resume<span className="sr-only"> (opens in a new tab)</span></a>
-                <a href="https://github.com/cytronicoder" target="_blank" rel="noopener noreferrer"><Code2 aria-hidden/>GitHub<span
+                <a href={site.githubUrl} target="_blank" rel="noopener noreferrer"><Code2 aria-hidden/>GitHub<span
                     className="sr-only"> (opens in a new tab)</span></a>
-                <a href="https://cytronicoder.com" target="_blank" rel="noopener noreferrer">Portfolio<ArrowUpRight
+                <a href={site.portfolioUrl} target="_blank" rel="noopener noreferrer">Portfolio<ArrowUpRight
                     aria-hidden/><span className="sr-only"> (opens in a new tab)</span></a>
                 <button type="button" className="icon-button command-trigger" aria-label="Open command palette"
                         onClick={() => setPaletteOpen(true)}><Search aria-hidden/></button>
