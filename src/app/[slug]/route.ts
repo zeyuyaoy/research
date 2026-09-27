@@ -7,23 +7,40 @@ const PRIVATE_REDIRECT_HEADERS = {"X-Robots-Tag": "noindex", "Cache-Control": "n
 
 export async function GET(_req: NextRequest, {params}: { params: Promise<{ slug: string }> }) {
     const slug = normalizeSlug((await params).slug || "");
-    if (!slug || !isValidSlug(slug)) return new NextResponse("Not found", {
-        status: 404,
-        headers: PRIVATE_REDIRECT_HEADERS
-    });
+    if (!slug || !isValidSlug(slug)) {
+        return new NextResponse("Not found", {
+            status: 404,
+            headers: PRIVATE_REDIRECT_HEADERS,
+        });
+    }
     try {
         const project = await getProject(slug);
-        if (!project) return new NextResponse("Not found", {status: 404, headers: PRIVATE_REDIRECT_HEADERS});
+        if (!project) {
+            return new NextResponse("Not found", {
+                status: 404,
+                headers: PRIVATE_REDIRECT_HEADERS,
+            });
+        }
         try {
             await (await getRedisClient()).incr(`count:${slug}`);
             invalidateDirectoryCache();
-        } catch { /* Redirects remain available if analytics writes fail. */
+        } catch {
         }
-        const response = NextResponse.redirect(project.target, project.metadata.permanent ? 308 : 307);
-        Object.entries(PRIVATE_REDIRECT_HEADERS).forEach(([name, value]) => response.headers.set(name, value));
+        const response = NextResponse.redirect(
+            project.target,
+            project.metadata.permanent ? 308 : 307,
+        );
+        Object.entries(PRIVATE_REDIRECT_HEADERS).forEach(([name, value]) =>
+            response.headers.set(name, value),
+        );
         return response;
     } catch (error) {
-        if (!(error instanceof RedisUnavailableError)) console.error("Redirect lookup failed:", error);
-        return new NextResponse("Service unavailable", {status: 503, headers: PRIVATE_REDIRECT_HEADERS});
+        if (!(error instanceof RedisUnavailableError)) {
+            console.error("Redirect lookup failed:", error);
+        }
+        return new NextResponse("Service unavailable", {
+            status: 503,
+            headers: PRIVATE_REDIRECT_HEADERS,
+        });
     }
 }

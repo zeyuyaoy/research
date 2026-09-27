@@ -19,7 +19,8 @@ html {
     scroll-behavior: smooth;
 }
 
-html, body {
+html,
+body {
     max-width: 100vw;
 }
 
@@ -37,11 +38,15 @@ body.dialog-open {
     overflow: hidden;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
     font: inherit;
 }
 
-button, a {
+button,
+a {
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -105,17 +110,17 @@ button {
 .site-brand strong {
     font-size: 1.35rem;
     font-weight: 700;
-    letter-spacing: -.01em;
+    letter-spacing: -0.01em;
     line-height: 1.3;
 }
 
 .site-brand strong span {
-    font-size: .95em;
+    font-size: 0.95em;
 }
 
 .site-brand .section-link {
     color: var(--link-color);
-    font-size: .85rem;
+    font-size: 0.85rem;
     gap: 6px;
 }
 
@@ -155,14 +160,14 @@ button {
 .archive-intro h1 {
     font-size: 1.75rem;
     font-weight: 700;
-    letter-spacing: -.01em;
+    letter-spacing: -0.01em;
     line-height: 1.25;
     margin: 0 0 var(--space-2);
 }
 
 .archive-intro p {
     color: var(--muted-color);
-    font-size: .95rem;
+    font-size: 0.95rem;
     margin: 0;
 }
 
@@ -180,7 +185,9 @@ button {
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    transition: background 0.16s ease,
+    border-color 0.16s ease,
+    transform 0.16s ease;
 }
 
 .icon-button:hover {
@@ -195,7 +202,7 @@ button {
 
 .archive-search {
     display: grid;
-    grid-template-columns:minmax(0, 1fr) 58px;
+    grid-template-columns: minmax(0, 1fr) 58px;
     align-items: center;
     padding: 0;
     margin: var(--space-4) 0 var(--space-3);
@@ -217,7 +224,8 @@ button {
 
 .search-field:focus-within {
     border-color: var(--link-color);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 17%, transparent), var(--shadow);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 17%, transparent),
+    var(--shadow);
 }
 
 .search-field > svg {
@@ -242,7 +250,6 @@ button {
     color: var(--subtle);
 }
 
-/* The labeled clear button and containing field own these interactions. */
 .search-field input::-webkit-search-cancel-button {
     -webkit-appearance: none;
 }
@@ -254,7 +261,7 @@ button {
     border-radius: 6px;
     background: var(--hover-bg);
     color: var(--muted);
-    font-size: .75rem;
+    font-size: 0.75rem;
 }
 
 .search-field button {
@@ -282,8 +289,8 @@ button {
     width: 58px;
     height: 58px;
     object-fit: contain;
-    opacity: .9;
-    filter: var(--mascot-filter, hue-rotate(35deg) saturate(.47) brightness(1));
+    opacity: 0.9;
+    filter: var(--mascot-filter, hue-rotate(35deg) saturate(0.47) brightness(1));
 }
 
 .archive-toolbar {
@@ -310,7 +317,7 @@ button {
     border-radius: 6px;
     background: transparent;
     color: var(--muted);
-    font-size: .84rem;
+    font-size: 0.84rem;
     font-weight: 700;
     cursor: pointer;
     min-width: 0;
@@ -325,7 +332,7 @@ button {
     flex: 1;
     margin: 0;
     color: var(--muted);
-    font-size: .84rem;
+    font-size: 0.84rem;
     min-width: 0;
     overflow-wrap: anywhere;
 }
@@ -353,7 +360,7 @@ button {
     border: 1px solid var(--input-border);
     border-radius: 8px;
     background: var(--card-bg);
-    font-size: .84rem;
+    font-size: 0.84rem;
     font-weight: 700;
     cursor: pointer;
     gap: var(--space-2);
@@ -372,10 +379,12 @@ button {
     border-radius: 999px;
     background: var(--button-primary);
     color: var(--on-primary);
-    font-size: .7rem;
+    font-size: 0.7rem;
 }
 
-.quick-filters, .active-filters, .tag-row {
+.quick-filters,
+.active-filters,
+.tag-row {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2);
@@ -386,22 +395,29 @@ button {
     margin-top: var(--space-3);
 }
 
-.quick-filters button, .tag-row button, .tag-row a, .timeline-tags button {
+.quick-filters button,
+.tag-row button,
+.tag-row a,
+.timeline-tags button {
     min-height: 32px;
     padding: 4px 11px;
     border: 1px solid var(--card-border);
     border-radius: 999px;
     background: var(--card-bg);
     color: var(--link-color);
-    font-size: .75rem;
+    font-size: 0.75rem;
     font-weight: 700;
     cursor: pointer;
-    transition: background .15s ease, border-color .15s ease;
+    transition: background 0.15s ease,
+    border-color 0.15s ease;
     max-width: 100%;
     overflow-wrap: anywhere;
 }
 
-.quick-filters button:hover, .quick-filters button[aria-pressed="true"], .tag-row button:hover, .tag-row a:hover {
+.quick-filters button:hover,
+.quick-filters button[aria-pressed="true"],
+.tag-row button:hover,
+.tag-row a:hover {
     background: var(--primary-soft);
     border-color: color-mix(in srgb, var(--primary-color) 42%, var(--card-border));
 }
@@ -412,7 +428,8 @@ button {
     color: var(--muted-color);
 }
 
-.quick-filters .topics-more:hover, .quick-filters .topics-more:focus-visible {
+.quick-filters .topics-more:hover,
+.quick-filters .topics-more:focus-visible {
     background: var(--primary-soft);
     border-color: var(--input-border);
     color: var(--link-color);
@@ -433,7 +450,7 @@ button {
     border-radius: 999px;
     background: var(--primary-soft);
     color: var(--link-color);
-    font-size: .78rem;
+    font-size: 0.78rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -487,7 +504,7 @@ button {
 
 .entry-date {
     color: var(--muted);
-    font-size: .78rem;
+    font-size: 0.78rem;
     line-height: 1.3;
     text-align: right;
     font-weight: 700;
@@ -514,18 +531,22 @@ button {
     top: calc(var(--space-panel) + var(--space-2) - 1px);
 }
 
-.project-card, .collection-card {
+.project-card,
+.collection-card {
     min-width: 0;
     border: 1px solid var(--card-border);
     border-radius: var(--radius);
     background: var(--card-bg);
     box-shadow: var(--shadow-sm);
-    transition: box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+    transition: box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
     max-width: 100%;
     padding: var(--space-panel);
 }
 
-.project-card:hover, .project-card:focus-within {
+.project-card:hover,
+.project-card:focus-within {
     border-color: color-mix(in srgb, var(--primary-color) 46%, var(--card-border));
 }
 
@@ -542,12 +563,13 @@ button {
     gap: var(--space-3);
 }
 
-.project-card h2, .collection-card h2 {
+.project-card h2,
+.collection-card h2 {
     margin: 0;
     color: var(--foreground);
     font-size: 1.1rem;
     line-height: 1.3;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
 }
 
 .project-card h2 a:hover {
@@ -557,14 +579,14 @@ button {
 .organization-line {
     margin: 5px 0 0;
     color: var(--link-color);
-    font-size: .76rem;
+    font-size: 0.76rem;
     font-weight: 700;
 }
 
 .project-description {
     max-width: 760px;
     color: var(--muted);
-    font-size: .95rem;
+    font-size: 0.95rem;
     line-height: 1.6;
     margin: 0;
 }
@@ -586,7 +608,7 @@ mark {
     border-radius: 7px;
     background: transparent;
     color: var(--muted);
-    font-size: .74rem;
+    font-size: 0.74rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -604,7 +626,7 @@ mark {
 .tag-row > span {
     color: var(--muted);
     align-self: center;
-    font-size: .75rem;
+    font-size: 0.75rem;
 }
 
 .project-actions {
@@ -617,7 +639,8 @@ mark {
     padding-top: var(--space-3);
 }
 
-.primary-button, .secondary-button {
+.primary-button,
+.secondary-button {
     min-height: 44px;
     border-radius: 8px;
     padding: 0 15px;
@@ -625,7 +648,7 @@ mark {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-size: .8rem;
+    font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
 }
@@ -641,7 +664,8 @@ mark {
     border-color: var(--button-primary-hover);
 }
 
-.primary-button svg, .secondary-button svg {
+.primary-button svg,
+.secondary-button svg {
     width: 16px;
 }
 
@@ -664,7 +688,7 @@ mark {
     align-items: center;
     gap: 6px;
     color: var(--link-color);
-    font-size: .78rem;
+    font-size: 0.78rem;
     font-weight: 700;
 }
 
@@ -679,7 +703,8 @@ mark {
     border: 1px solid var(--card-border);
     border-radius: 9px;
     background: var(--card-bg);
-    transition: background .15s ease, border-color .15s ease;
+    transition: background 0.15s ease,
+    border-color 0.15s ease;
     gap: var(--space-3);
     padding: var(--space-3);
 }
@@ -706,12 +731,12 @@ mark {
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--foreground);
-    font-size: .81rem;
+    font-size: 0.81rem;
 }
 
 .artifact-copy small {
     color: var(--muted);
-    font-size: .71rem;
+    font-size: 0.71rem;
 }
 
 .artifact-link .artifact-external {
@@ -728,13 +753,14 @@ mark {
 
 .artifact-link-compact .artifact-copy strong {
     color: var(--link-color);
-    font-size: .76rem;
+    font-size: 0.76rem;
 }
 
 .collection-card {
     border-color: var(--collection-border);
     background: var(--collection-bg);
-    box-shadow: inset 0 3px 0 var(--collection-accent), var(--shadow-sm);
+    box-shadow: inset 0 3px 0 var(--collection-accent),
+    var(--shadow-sm);
 }
 
 .collection-card .tag-row button {
@@ -744,7 +770,7 @@ mark {
 
 .collection-top {
     display: grid;
-    grid-template-columns:minmax(0, 1.3fr) minmax(230px, .7fr);
+    grid-template-columns: minmax(0, 1.3fr) minmax(230px, 0.7fr);
     align-items: start;
     gap: var(--space-4);
 }
@@ -783,9 +809,9 @@ mark {
 
 .collection-desktop-outputs h3 {
     color: var(--muted);
-    font-size: .76rem;
+    font-size: 0.76rem;
     text-transform: uppercase;
-    letter-spacing: .08em;
+    letter-spacing: 0.08em;
     margin: 0 0 var(--space-3);
 }
 
@@ -794,12 +820,13 @@ mark {
     gap: var(--space-2);
 }
 
-.collection-output-grid a, .collection-mobile-outputs a {
+.collection-output-grid a,
+.collection-mobile-outputs a {
     display: flex;
     align-items: center;
     border-radius: 7px;
     color: var(--foreground);
-    font-size: .78rem;
+    font-size: 0.78rem;
     padding: var(--space-2) var(--space-3);
     gap: var(--space-2);
 }
@@ -852,7 +879,7 @@ mark {
     position: relative;
     min-height: 92px;
     display: grid;
-    grid-template-columns:100px minmax(0, 1fr);
+    grid-template-columns: 100px minmax(0, 1fr);
     align-items: center;
     border-bottom: 1px solid var(--card-border);
     padding: var(--space-4) var(--space-3);
@@ -874,7 +901,7 @@ mark {
 
 .timeline-date {
     color: var(--muted);
-    font-size: .76rem;
+    font-size: 0.76rem;
     font-weight: 700;
 }
 
@@ -883,7 +910,7 @@ mark {
     align-items: center;
     justify-content: space-between;
     color: var(--foreground);
-    font-size: .93rem;
+    font-size: 0.93rem;
     gap: var(--space-3);
     min-width: 0;
     min-height: 44px;
@@ -934,7 +961,7 @@ dialog {
 }
 
 dialog::backdrop {
-    background: rgba(17, 25, 21, .52);
+    background: rgba(17, 25, 21, 0.52);
     backdrop-filter: blur(2px);
 }
 
@@ -944,7 +971,13 @@ dialog::backdrop {
     border-radius: 14px;
     background: var(--card-raised);
     overflow: hidden;
-    width: min(740px, calc(100% - 2 * max(var(--dialog-clearance), env(safe-area-inset-left), env(safe-area-inset-right))));
+    width: min(
+            740px,
+            calc(
+                    100% - 2 *
+                    max(var(--dialog-clearance), env(safe-area-inset-left), env(safe-area-inset-right))
+            )
+    );
     max-width: none;
     max-height: calc(100dvh - 2 * var(--dialog-clearance));
     margin: var(--dialog-clearance) auto auto;
@@ -998,9 +1031,9 @@ dialog::backdrop {
 
 .command-results h2 {
     color: var(--subtle);
-    font-size: .67rem;
+    font-size: 0.67rem;
     text-transform: uppercase;
-    letter-spacing: .11em;
+    letter-spacing: 0.11em;
     margin: var(--space-2) var(--space-3);
 }
 
@@ -1018,7 +1051,8 @@ dialog::backdrop {
     gap: var(--space-3);
 }
 
-.command-item[aria-selected="true"], .command-item:hover {
+.command-item[aria-selected="true"],
+.command-item:hover {
     background: var(--primary-soft);
 }
 
@@ -1036,12 +1070,12 @@ dialog::backdrop {
 
 .command-item strong {
     color: var(--foreground);
-    font-size: .84rem;
+    font-size: 0.84rem;
 }
 
 .command-item small {
     color: var(--muted);
-    font-size: .71rem;
+    font-size: 0.71rem;
 }
 
 .command-item .command-trailing {
@@ -1062,7 +1096,7 @@ dialog::backdrop {
     align-items: center;
     border-top: 1px solid var(--card-border);
     color: var(--muted);
-    font-size: .69rem;
+    font-size: 0.69rem;
     padding: var(--space-3) var(--dialog-padding);
     gap: var(--space-3);
     flex-shrink: 0;
@@ -1078,7 +1112,7 @@ dialog::backdrop {
     border: 0;
     border-left: 1px solid var(--line);
     background: var(--card-raised);
-    box-shadow: -25px 0 70px rgba(0, 0, 0, .18);
+    box-shadow: -25px 0 70px rgba(0, 0, 0, 0.18);
     max-width: 100vw;
     display: none;
 }
@@ -1112,7 +1146,7 @@ dialog::backdrop {
     border-radius: 999px;
     background: var(--primary-soft);
     color: var(--link-color);
-    font-size: .68rem;
+    font-size: 0.68rem;
     font-weight: 700;
 }
 
@@ -1135,9 +1169,10 @@ dialog::backdrop {
     margin: 0 0 var(--space-6);
 }
 
-.filter-body legend, .filter-select strong {
+.filter-body legend,
+.filter-select strong {
     color: var(--foreground);
-    font-size: .8rem;
+    font-size: 0.8rem;
     font-weight: 700;
     margin-bottom: var(--space-3);
 }
@@ -1152,7 +1187,8 @@ dialog::backdrop {
     flex: 1 0 max-content;
 }
 
-.filter-options-inline label, .filter-checks label {
+.filter-options-inline label,
+.filter-checks label {
     display: flex;
     align-items: center;
     min-height: 44px;
@@ -1163,27 +1199,30 @@ dialog::backdrop {
     min-width: 0;
 }
 
-.filter-options-inline input, .filter-checks input {
+.filter-options-inline input,
+.filter-checks input {
     width: 18px;
     height: 18px;
     flex: none;
     accent-color: var(--link-color);
 }
 
-.filter-options-inline label:has(:checked), .filter-checks label:has(:checked) {
+.filter-options-inline label:has(:checked),
+.filter-checks label:has(:checked) {
     color: var(--link-color);
     background: var(--accent-soft);
     font-weight: 700;
 }
 
-.filter-options-inline span, .filter-checks span {
-    font-size: .85rem;
+.filter-options-inline span,
+.filter-checks span {
+    font-size: 0.85rem;
     overflow-wrap: anywhere;
 }
 
 .filter-empty {
     color: var(--muted-color);
-    font-size: .85rem;
+    font-size: 0.85rem;
 }
 
 .filter-search {
@@ -1248,7 +1287,7 @@ dialog::backdrop {
     align-items: center;
     gap: 7px;
     color: var(--link-color);
-    font-size: .8rem;
+    font-size: 0.8rem;
     font-weight: 700;
 }
 
@@ -1261,9 +1300,10 @@ dialog::backdrop {
     margin: var(--space-6) 0 var(--section-gap);
 }
 
-.detail-kicker, .section-kicker {
+.detail-kicker,
+.section-kicker {
     color: var(--link-color);
-    font-size: .71rem;
+    font-size: 0.71rem;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -1272,7 +1312,7 @@ dialog::backdrop {
     color: var(--foreground);
     font-size: clamp(1.75rem, 3.5vw, 2.5rem);
     line-height: 1.2;
-    letter-spacing: -.02em;
+    letter-spacing: -0.02em;
     margin: var(--space-3) 0 var(--space-4);
 }
 
@@ -1289,7 +1329,7 @@ dialog::backdrop {
     flex-wrap: wrap;
     align-items: center;
     color: var(--muted);
-    font-size: .78rem;
+    font-size: 0.78rem;
     font-weight: 700;
     margin-top: var(--space-4);
     gap: var(--space-3) var(--space-5);
@@ -1318,7 +1358,7 @@ dialog::backdrop {
 
 .detail-layout {
     display: grid;
-    grid-template-columns:minmax(0, 1fr) 280px;
+    grid-template-columns: minmax(0, 1fr) 280px;
     align-items: start;
     gap: var(--space-8);
 }
@@ -1328,10 +1368,11 @@ dialog::backdrop {
     gap: var(--section-gap);
 }
 
-.detail-main section > h2, .related-research h2 {
+.detail-main section > h2,
+.related-research h2 {
     color: var(--foreground);
     font-size: 1.35rem;
-    letter-spacing: -.025em;
+    letter-spacing: -0.025em;
     margin: 0 0 var(--space-4);
 }
 
@@ -1346,7 +1387,10 @@ dialog::backdrop {
 
 .artifact-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(280px, calc((100% - var(--space-4)) / 2))), 1fr));
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(min(100%, max(280px, calc((100% - var(--space-4)) / 2))), 1fr)
+    );
     gap: var(--space-4);
 }
 
@@ -1379,7 +1423,7 @@ dialog::backdrop {
 
 .people-list span {
     color: var(--muted);
-    font-size: .75rem;
+    font-size: 0.75rem;
 }
 
 .people-list a {
@@ -1387,7 +1431,7 @@ dialog::backdrop {
     align-items: center;
     gap: 4px;
     color: var(--link-color);
-    font-size: .75rem;
+    font-size: 0.75rem;
     font-weight: 700;
 }
 
@@ -1412,9 +1456,9 @@ dialog::backdrop {
     align-items: center;
     gap: 7px;
     color: var(--foreground);
-    font-size: .78rem;
+    font-size: 0.78rem;
     text-transform: uppercase;
-    letter-spacing: .07em;
+    letter-spacing: 0.07em;
 }
 
 .detail-aside h2 svg {
@@ -1431,7 +1475,7 @@ dialog::backdrop {
 
 .detail-aside li {
     color: var(--muted);
-    font-size: .8rem;
+    font-size: 0.8rem;
 }
 
 .detail-aside li a {
@@ -1456,7 +1500,8 @@ dialog::backdrop {
     margin-bottom: var(--space-5);
 }
 
-.related-research .section-kicker, .related-research h2 {
+.related-research .section-kicker,
+.related-research h2 {
     margin: 0;
 }
 
@@ -1483,7 +1528,7 @@ dialog::backdrop {
 
 .related-grid span {
     color: var(--link-color);
-    font-size: .66rem;
+    font-size: 0.66rem;
     font-weight: 700;
     text-transform: uppercase;
 }
@@ -1496,7 +1541,7 @@ dialog::backdrop {
 
 .related-grid p {
     color: var(--muted);
-    font-size: .78rem;
+    font-size: 0.78rem;
     line-height: 1.5;
     margin: var(--space-3) 0 var(--space-4);
 }
@@ -1507,7 +1552,7 @@ dialog::backdrop {
     align-items: center;
     gap: 5px;
     color: var(--link-color);
-    font-size: .75rem;
+    font-size: 0.75rem;
     font-style: normal;
     font-weight: 700;
 }
@@ -1525,15 +1570,16 @@ dialog::backdrop {
     border: 1px solid var(--carousel-control-border);
     background: var(--carousel-control-bg);
     color: var(--carousel-control-text);
-    box-shadow: 0 5px 16px rgba(11, 27, 20, .2);
+    box-shadow: 0 5px 16px rgba(11, 27, 20, 0.2);
     backdrop-filter: blur(5px);
     cursor: pointer;
-    transition: background-color .15s ease, box-shadow .15s ease;
+    transition: background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .carousel-control:hover {
     background: var(--carousel-control-hover);
-    box-shadow: 0 6px 18px rgba(11, 27, 20, .28);
+    box-shadow: 0 6px 18px rgba(11, 27, 20, 0.28);
 }
 
 .carousel-control:focus-visible {
@@ -1560,16 +1606,17 @@ dialog::backdrop {
     inset: 50% auto auto 50%;
     width: 11px;
     height: 11px;
-    border: 1px solid rgba(28, 45, 37, .24);
+    border: 1px solid rgba(28, 45, 37, 0.24);
     border-radius: 50%;
     background: var(--carousel-dot);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, .18);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
     transform: translate(-50%, -50%);
 }
 
 .carousel-dot[aria-current="true"]::after {
     background: var(--carousel-dot-active);
-    box-shadow: 0 0 0 2px rgba(43, 79, 64, .62), 0 1px 4px rgba(0, 0, 0, .2);
+    box-shadow: 0 0 0 2px rgba(43, 79, 64, 0.62),
+    0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 .loading-shell {
@@ -1588,7 +1635,12 @@ dialog::backdrop {
     position: absolute;
     inset: 0;
     transform: translateX(-100%);
-    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--card-bg) 80%, transparent), transparent);
+    background: linear-gradient(
+            90deg,
+            transparent,
+            color-mix(in srgb, var(--card-bg) 80%, transparent),
+            transparent
+    );
     animation: shimmer 1.4s infinite;
 }
 
@@ -1619,7 +1671,6 @@ dialog::backdrop {
     }
 }
 
-/* Shared page chrome and research-specific extensions of the portfolio system. */
 body {
     min-height: 100svh;
     display: flex;
@@ -1639,14 +1690,15 @@ body {
     border-radius: var(--radius-lg);
     background: var(--surface-color);
     box-shadow: var(--shadow-sm);
-    font-size: .85rem;
+    font-size: 0.85rem;
     width: min(var(--content-width), calc(100% - 2 * var(--page-inset)));
     margin: 0 auto max(var(--space-6), env(safe-area-inset-bottom));
     padding: var(--footer-padding);
     gap: var(--space-3) var(--space-4);
 }
 
-.site-footer > a, .site-footer > nav > a {
+.site-footer > a,
+.site-footer > nav > a {
     display: inline-flex;
     min-height: 44px;
     align-items: center;
@@ -1661,12 +1713,14 @@ body {
     gap: var(--space-4);
 }
 
-.site-footer > a:hover, .site-footer > nav > a:hover {
+.site-footer > a:hover,
+.site-footer > nav > a:hover {
     text-decoration: underline;
     text-underline-offset: 3px;
 }
 
-.site-footer > a svg, .site-footer > nav > a svg {
+.site-footer > a svg,
+.site-footer > nav > a svg {
     width: 15px;
     height: 15px;
 }
@@ -1699,11 +1753,16 @@ main:focus {
     box-shadow: none;
 }
 
-button, a, select {
-    transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
+button,
+a,
+select {
+    transition: color var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
 }
 
-button:not(:disabled), summary {
+button:not(:disabled),
+summary {
     cursor: pointer;
 }
 
@@ -1711,28 +1770,39 @@ svg {
     flex-shrink: 0;
 }
 
-h1, h2, h3, .project-card-heading > div, .collection-copy, .detail-main, .detail-aside, .people-list p {
+h1,
+h2,
+h3,
+.project-card-heading > div,
+.collection-copy,
+.detail-main,
+.detail-aside,
+.people-list p {
     min-width: 0;
     overflow-wrap: anywhere;
 }
 
-h1, h2, h3 {
+h1,
+h2,
+h3 {
     font-weight: 700;
 }
 
-.project-card:focus-within, .project-card:hover {
+.project-card:focus-within,
+.project-card:hover {
     box-shadow: var(--shadow-sm);
 }
 
 .collection-copy > p {
-    font-size: .95rem;
+    font-size: 0.95rem;
 }
 
 .collection-output-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.collection-output-grid a, .collection-mobile-outputs a {
+.collection-output-grid a,
+.collection-mobile-outputs a {
     min-height: 44px;
     overflow-wrap: anywhere;
 }
@@ -1747,7 +1817,11 @@ h1, h2, h3 {
     overflow-wrap: anywhere;
 }
 
-.artifact-link-compact, .copy-link, .view-switch button, .text-link, .back-link {
+.artifact-link-compact,
+.copy-link,
+.view-switch button,
+.text-link,
+.back-link {
     min-height: 44px;
 }
 
@@ -1779,8 +1853,9 @@ h1, h2, h3 {
     background: var(--surface-color);
 }
 
-.detail-kicker, .section-kicker {
-    letter-spacing: .06em;
+.detail-kicker,
+.section-kicker {
+    letter-spacing: 0.06em;
 }
 
 .project-primary {
@@ -1818,7 +1893,7 @@ h1, h2, h3 {
 
 .carousel-control:disabled {
     cursor: default;
-    opacity: .85;
+    opacity: 0.85;
 }
 
 .carousel-dot {
@@ -1831,7 +1906,9 @@ h1, h2, h3 {
     outline-offset: 3px;
 }
 
-.search-field input:focus-visible, .filter-search input:focus-visible, .command-search input:focus-visible {
+.search-field input:focus-visible,
+.filter-search input:focus-visible,
+.command-search input:focus-visible {
     outline: none;
     box-shadow: none;
 }
@@ -1846,7 +1923,8 @@ h1, h2, h3 {
     flex-direction: column;
 }
 
-.filter-dialog > header, .filter-dialog > footer {
+.filter-dialog > header,
+.filter-dialog > footer {
     flex-shrink: 0;
 }
 
@@ -1855,8 +1933,9 @@ h1, h2, h3 {
     white-space: normal;
 }
 
-.filter-dialog legend, .filter-select strong {
-    font-size: .9rem;
+.filter-dialog legend,
+.filter-select strong {
+    font-size: 0.9rem;
 }
 
 .command-close {
@@ -1879,17 +1958,20 @@ h1, h2, h3 {
     }
 }
 
-.tag-row button[aria-pressed="true"], .timeline-tags button[aria-pressed="true"] {
+.tag-row button[aria-pressed="true"],
+.timeline-tags button[aria-pressed="true"] {
     border-color: var(--link-color);
     box-shadow: inset 0 0 0 1px var(--link-color);
 }
 
-.tag-row button[aria-pressed="true"]::before, .timeline-tags button[aria-pressed="true"]::before {
+.tag-row button[aria-pressed="true"]::before,
+.timeline-tags button[aria-pressed="true"]::before {
     content: "✓ ";
 }
 
 @media (max-width: 980px) {
-    .archive-content::before, .entry-dot {
+    .archive-content::before,
+    .entry-dot {
         display: none;
     }
 
@@ -1950,7 +2032,7 @@ h1, h2, h3 {
 
 @media (min-width: 700px) and (max-width: 980px) {
     .collection-top {
-        grid-template-columns: minmax(0, 1.3fr) minmax(200px, .8fr);
+        grid-template-columns: minmax(0, 1.3fr) minmax(200px, 0.8fr);
     }
 }
 
@@ -1997,7 +2079,8 @@ h1, h2, h3 {
         flex: none;
     }
 
-    .project-card h2, .collection-card h2 {
+    .project-card h2,
+    .collection-card h2 {
         font-size: 1.04rem;
     }
 
@@ -2011,7 +2094,10 @@ h1, h2, h3 {
         width: 44px;
     }
 
-    .quick-filters button, .tag-row button, .tag-row a, .timeline-tags button {
+    .quick-filters button,
+    .tag-row button,
+    .tag-row a,
+    .timeline-tags button {
         min-height: 44px;
     }
 
@@ -2047,7 +2133,7 @@ h1, h2, h3 {
         align-items: center;
         gap: var(--space-2);
         color: var(--link-color);
-        font-size: .8rem;
+        font-size: 0.8rem;
         font-weight: 700;
         cursor: pointer;
         list-style: none;
@@ -2063,7 +2149,7 @@ h1, h2, h3 {
 
     .collection-mobile-outputs summary svg:last-child {
         margin-left: auto;
-        transition: transform .15s ease;
+        transition: transform 0.15s ease;
     }
 
     .collection-mobile-outputs[open] summary svg:last-child {
@@ -2088,14 +2174,16 @@ h1, h2, h3 {
         border: 0;
         border-top: 1px solid var(--line);
         border-radius: 24px 24px 0 0;
-        box-shadow: 0 -25px 70px rgba(0, 0, 0, .2);
+        box-shadow: 0 -25px 70px rgba(0, 0, 0, 0.2);
     }
 
     .filter-checks {
         grid-template-columns: minmax(0, 1fr);
     }
 
-    .filter-search input, .filter-select select, .command-search input {
+    .filter-search input,
+    .filter-select select,
+    .command-search input {
         font-size: 1rem;
     }
 
@@ -2135,7 +2223,8 @@ h1, h2, h3 {
         content: " projects";
     }
 
-    .artifact-grid, .related-grid {
+    .artifact-grid,
+    .related-grid {
         grid-template-columns: minmax(0, 1fr);
     }
 }
@@ -2147,7 +2236,10 @@ h1, h2, h3 {
 }
 
 @media (hover: none) and (pointer: coarse) {
-    .quick-filters button, .tag-row button, .tag-row a, .timeline-tags button {
+    .quick-filters button,
+    .tag-row button,
+    .tag-row a,
+    .timeline-tags button {
         min-height: 44px;
     }
 }

@@ -24,32 +24,52 @@ function optionalText(value: unknown): string | undefined {
 }
 
 export function parsePhotoSets(value: unknown): Record<string, PhotoSet> {
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("photoSets.yml must contain a mapping");
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("photoSets.yml must contain a mapping");
+    }
     const result: Record<string, PhotoSet> = {};
     for (const [rawKey, rawValue] of Object.entries(value)) {
-        if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) throw new Error(`photo set ${rawKey} must be a mapping`);
+        if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+            throw new Error(`photo set ${rawKey} must be a mapping`);
+        }
         const item = rawValue as Record<string, unknown>;
-        if (!Array.isArray(item.slides) || item.slides.length === 0) throw new Error(`photo set ${rawKey} must include slides`);
-        const slides = item.slides.map((rawSlide, index): Slide => {
-            if (!rawSlide || typeof rawSlide !== "object" || Array.isArray(rawSlide)) throw new Error(`slide ${index + 1} in ${rawKey} must be a mapping`);
-            const slide = rawSlide as Record<string, unknown>;
-            const src = optionalText(slide.src);
-            const alt = optionalText(slide.alt);
-            const date = optionalText(slide.date);
-            if (!src?.startsWith("/") || !alt) throw new Error(`slide ${index + 1} in ${rawKey} requires an absolute src and descriptive alt`);
-            if (date && !isValidDate(date)) throw new Error(`slide ${index + 1} in ${rawKey} has an invalid ISO date`);
-            return {src, alt, caption: optionalText(slide.caption), date};
-        }).toSorted((a, b) => (b.date || "").localeCompare(a.date || "") || a.src.localeCompare(b.src));
+        if (!Array.isArray(item.slides) || item.slides.length === 0) {
+            throw new Error(`photo set ${rawKey} must include slides`);
+        }
+        const slides = item.slides
+            .map((rawSlide, index): Slide => {
+                if (!rawSlide || typeof rawSlide !== "object" || Array.isArray(rawSlide)) {
+                    throw new Error(`slide ${index + 1} in ${rawKey} must be a mapping`);
+                }
+                const slide = rawSlide as Record<string, unknown>;
+                const src = optionalText(slide.src);
+                const alt = optionalText(slide.alt);
+                const date = optionalText(slide.date);
+                if (!src?.startsWith("/") || !alt) {
+                    throw new Error(
+                        `slide ${index + 1} in ${rawKey} requires an absolute src and descriptive alt`,
+                    );
+                }
+                if (date && !isValidDate(date)) {
+                    throw new Error(`slide ${index + 1} in ${rawKey} has an invalid ISO date`);
+                }
+                return {src, alt, caption: optionalText(slide.caption), date};
+            })
+            .toSorted(
+                (a, b) => (b.date || "").localeCompare(a.date || "") || a.src.localeCompare(b.src),
+            );
         const key = rawKey.toLowerCase();
         const date = optionalText(item.date);
-        if (date && !isValidDate(date)) throw new Error(`photo set ${rawKey} has an invalid ISO date`);
+        if (date && !isValidDate(date)) {
+            throw new Error(`photo set ${rawKey} has an invalid ISO date`);
+        }
         result[key] = {
             id: optionalText(item.id) || key,
             title: optionalText(item.title),
             description: optionalText(item.description),
             date,
             tags: normalizeTags(item.tags),
-            slides
+            slides,
         };
     }
     return result;

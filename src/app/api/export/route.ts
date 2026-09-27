@@ -9,19 +9,29 @@ type ExportRow = Record<string, ExportValue>;
 
 export async function GET(req: NextRequest) {
     const auth = authorizeAdmin(req);
-    if (auth) return auth;
+    if (auth) {
+        return auth;
+    }
     try {
         const {searchParams} = new URL(req.url);
         const format = (searchParams.get("format") || "json").toLowerCase();
-        if (!new Set(["json", "csv", "yaml", "yml"]).has(format)) return jsonError("format must be json, csv, yaml, or yml", 400);
+        if (!new Set(["json", "csv", "yaml", "yml"]).has(format)) {
+            return jsonError("format must be json, csv, yaml, or yml", 400);
+        }
         const source = searchParams.get("source");
-        if (source && source !== "manual" && source !== "orcid") return jsonError("source must be manual or orcid", 400);
+        if (source && source !== "manual" && source !== "orcid") {
+            return jsonError("source must be manual or orcid", 400);
+        }
         const tag = searchParams.get("tag")?.trim().toLowerCase();
         const includeClicks = searchParams.get("includeClicks") !== "false";
         const {projects} = await getDirectorySnapshot({fresh: true});
         const records = projects
             .filter((project) => !source || project.source === source)
-            .filter((project) => !tag || project.metadata.tags.some((value) => value.toLowerCase().includes(tag)))
+            .filter(
+                (project) =>
+                    !tag ||
+                    project.metadata.tags.some((value) => value.toLowerCase().includes(tag)),
+            )
             .sort((a, b) => Date.parse(b.metadata.createdAt) - Date.parse(a.metadata.createdAt))
             .map((project) => ({
                 slug: project.slug,
@@ -50,14 +60,42 @@ export async function GET(req: NextRequest) {
                 photoSetId: record.photoSetId || "",
                 updatedAt: record.updatedAt || "",
             }));
-            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "source", ...(includeClicks ? ["clicks"] : []), "targetType", "permanent", "title", "description", "longDescription", "tags", "researchAreas", "technologies", "methods", "organizations", "collaborators", "artifacts", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
-            const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))].join("\n");
+            const headers = rows.length
+                ? Object.keys(rows[0])
+                : [
+                    "slug",
+                    "target",
+                    "source",
+                    ...(includeClicks ? ["clicks"] : []),
+                    "targetType",
+                    "permanent",
+                    "title",
+                    "description",
+                    "longDescription",
+                    "tags",
+                    "researchAreas",
+                    "technologies",
+                    "methods",
+                    "organizations",
+                    "collaborators",
+                    "artifacts",
+                    "startDate",
+                    "endDate",
+                    "githubRepo",
+                    "photoSetId",
+                    "createdAt",
+                    "updatedAt",
+                ];
+            const csv = [
+                headers.join(","),
+                ...rows.map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(",")),
+            ].join("\n");
             return new NextResponse(csv, {
                 headers: {
                     ...PRIVATE_HEADERS,
                     "Content-Type": "text/csv; charset=utf-8",
-                    "Content-Disposition": `attachment; filename="research-export-${date}.csv"`
-                }
+                    "Content-Disposition": `attachment; filename="research-export-${date}.csv"`,
+                },
             });
         }
         if (format === "yaml" || format === "yml") {
@@ -65,19 +103,22 @@ export async function GET(req: NextRequest) {
                 headers: {
                     ...PRIVATE_HEADERS,
                     "Content-Type": "application/yaml; charset=utf-8",
-                    "Content-Disposition": `attachment; filename="research-export-${date}.yaml"`
-                }
+                    "Content-Disposition": `attachment; filename="research-export-${date}.yaml"`,
+                },
             });
         }
-        return NextResponse.json({
-            export: records,
-            metadata: {
-                total: records.length,
-                generatedAt: new Date().toISOString(),
-                format: "json",
-                filters: {source: source || "all", tag: tag || null, includeClicks}
-            }
-        }, {headers: PRIVATE_HEADERS});
+        return NextResponse.json(
+            {
+                export: records,
+                metadata: {
+                    total: records.length,
+                    generatedAt: new Date().toISOString(),
+                    format: "json",
+                    filters: {source: source || "all", tag: tag || null, includeClicks},
+                },
+            },
+            {headers: PRIVATE_HEADERS},
+        );
     } catch (error) {
         return routeError(error, "GET /api/export");
     }

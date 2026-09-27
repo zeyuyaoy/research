@@ -12,35 +12,57 @@ import {
     serializeProjectMetadata,
     toPublicProject,
     validateCollectionInput,
-    validateProjectInput
+    validateProjectInput,
 } from "./models";
 
 describe("project validation", () => {
     it("round-trips target type overrides, preserves omitted values, and clears explicit null", () => {
-        const parsed = validateProjectInput({
-            slug: "study",
-            target: "https://example.org/opaque",
-            targetType: "file"
-        }, true);
+        const parsed = validateProjectInput(
+            {
+                slug: "study",
+                target: "https://example.org/opaque",
+                targetType: "file",
+            },
+            true,
+        );
         expect(parsed.success).toBe(true);
-        if (!parsed.success) return;
+        if (!parsed.success) {
+            return;
+        }
         const stored = serializeProjectMetadata(parsed.data);
         expect(parseMetadata("study", stored).targetType).toBe("file");
-        expect(serializeProjectMetadata({slug: "study", title: "Updated"}, stored).targetType).toBe("file");
-        expect(parseMetadata("study", serializeProjectMetadata({
-            slug: "study",
-            targetType: null
-        }, stored)).targetType).toBeNull();
+        expect(
+            serializeProjectMetadata({slug: "study", title: "Updated"}, stored).targetType,
+        ).toBe("file");
+        expect(
+            parseMetadata(
+                "study",
+                serializeProjectMetadata(
+                    {
+                        slug: "study",
+                        targetType: null,
+                    },
+                    stored,
+                ),
+            ).targetType,
+        ).toBeNull();
         expect(parseMetadata("study", {}).targetType).toBeNull();
         expect(parseMetadata("study", {targetType: "unknown"}).targetType).toBeNull();
-        expect(toPublicProject({
-            slug: "study", target: parsed.data.target!, source: "manual", clicks: 0,
-            metadata: parseMetadata("study", stored)
-        }).targetType).toBe("file");
+        expect(
+            toPublicProject({
+                slug: "study",
+                target: parsed.data.target!,
+                source: "manual",
+                clicks: 0,
+                metadata: parseMetadata("study", stored),
+            }).targetType,
+        ).toBe("file");
     });
 
     it.each(["invalid", "", 1, false, [], {}])("rejects an invalid targetType %j", (targetType) => {
-        expect(validateProjectInput({slug: "study", targetType}, false)).toMatchObject({success: false});
+        expect(validateProjectInput({slug: "study", targetType}, false)).toMatchObject({
+            success: false,
+        });
     });
 
     it.each([
@@ -64,8 +86,12 @@ describe("project validation", () => {
 
     it("prefers explicit types, then authored artifacts, and uses readable action labels", () => {
         const artifact = {
-            type: "poster" as const, title: "Poster", url: "https://example.org/study.pdf",
-            date: null, venue: null, featured: true
+            type: "poster" as const,
+            title: "Poster",
+            url: "https://example.org/study.pdf",
+            date: null,
+            venue: null,
+            featured: true,
         };
         const project = {target: artifact.url, artifacts: [artifact]};
         expect(resolveTargetType(project)).toBe("poster");
@@ -75,22 +101,33 @@ describe("project validation", () => {
     });
 
     it("normalizes compatible project input without fetching metadata", () => {
-        const parsed = validateProjectInput({
-            slug: "/My-Study",
-            target: "https://example.org/paper",
-            tags: "Bioinformatics, Bioinformatics, AI",
-            startDate: "2025-09"
-        }, true);
+        const parsed = validateProjectInput(
+            {
+                slug: "/My-Study",
+                target: "https://example.org/paper",
+                tags: "Bioinformatics, Bioinformatics, AI",
+                startDate: "2025-09",
+            },
+            true,
+        );
         expect(parsed).toEqual({
             success: true,
-            data: expect.objectContaining({slug: "my-study", tags: ["Bioinformatics", "AI"], startDate: "2025-09"})
+            data: expect.objectContaining({
+                slug: "my-study",
+                tags: ["Bioinformatics", "AI"],
+                startDate: "2025-09",
+            }),
         });
-        if (parsed.success) expect(serializeProjectMetadata(parsed.data).title).toBe("my-study");
+        if (parsed.success) {
+            expect(serializeProjectMetadata(parsed.data).title).toBe("my-study");
+        }
     });
 
     it("rejects unsafe URLs and impossible dates", () => {
         expect(isHttpUrl("file:///etc/passwd")).toBe(false);
-        expect(validateProjectInput({slug: "x", target: "javascript:alert(1)"}, true).success).toBe(false);
+        expect(
+            validateProjectInput({slug: "x", target: "javascript:alert(1)"}, true).success,
+        ).toBe(false);
         expect(isValidDate("2025-02-31")).toBe(false);
     });
 
@@ -110,58 +147,82 @@ describe("project validation", () => {
     });
 
     it("round-trips structured optional metadata and tolerates malformed stored JSON", () => {
-        const parsed = validateProjectInput({
-            slug: "study", target: "https://example.org", researchAreas: ["Genomics"],
-            organizations: [{name: "Institute", role: "Host", url: "https://example.org/institute"}],
-            artifacts: [{
-                type: "dataset",
-                title: "Data",
-                url: "https://example.org/data",
-                date: "2025",
-                venue: "Zenodo",
-                featured: true
-            }]
-        }, true);
+        const parsed = validateProjectInput(
+            {
+                slug: "study",
+                target: "https://example.org",
+                researchAreas: ["Genomics"],
+                organizations: [
+                    {name: "Institute", role: "Host", url: "https://example.org/institute"},
+                ],
+                artifacts: [
+                    {
+                        type: "dataset",
+                        title: "Data",
+                        url: "https://example.org/data",
+                        date: "2025",
+                        venue: "Zenodo",
+                        featured: true,
+                    },
+                ],
+            },
+            true,
+        );
         expect(parsed.success).toBe(true);
-        if (!parsed.success) return;
+        if (!parsed.success) {
+            return;
+        }
         const stored = serializeProjectMetadata(parsed.data);
-        expect(parseMetadata("study", stored)).toEqual(expect.objectContaining({
-            researchAreas: ["Genomics"],
-            organizations: [expect.objectContaining({name: "Institute"})],
-            artifacts: [expect.objectContaining({type: "dataset", featured: true})]
-        }));
-        expect(parseMetadata("old-record", {
-            researchAreas: "not-json",
-            artifacts: "{}"
-        })).toEqual(expect.objectContaining({researchAreas: [], artifacts: [], organizations: []}));
+        expect(parseMetadata("study", stored)).toEqual(
+            expect.objectContaining({
+                researchAreas: ["Genomics"],
+                organizations: [expect.objectContaining({name: "Institute"})],
+                artifacts: [expect.objectContaining({type: "dataset", featured: true})],
+            }),
+        );
+        expect(
+            parseMetadata("old-record", {
+                researchAreas: "not-json",
+                artifacts: "{}",
+            }),
+        ).toEqual(expect.objectContaining({researchAreas: [], artifacts: [], organizations: []}));
     });
 });
 
 describe("collection and query validation", () => {
     it("normalizes collection projects and tags", () => {
-        expect(validateCollectionInput({
-            id: "Group-One",
-            name: "Group",
-            projects: ["A", "b"],
-            tags: "genomics, data"
-        }, true)).toEqual({
+        expect(
+            validateCollectionInput(
+                {
+                    id: "Group-One",
+                    name: "Group",
+                    projects: ["A", "b"],
+                    tags: "genomics, data",
+                },
+                true,
+            ),
+        ).toEqual({
             success: true,
             data: {
                 id: "group-one",
                 name: "Group",
                 description: undefined,
                 projects: ["a", "b"],
-                tags: ["genomics", "data"]
-            }
+                tags: ["genomics", "data"],
+            },
         });
         expect(normalizeTags([" a ", "a", "b"])).toEqual(["a", "b"]);
     });
 
     it("rejects unbounded or invalid pagination", () => {
-        expect(parsePagination(new URLSearchParams("limit=-1"), {limit: 20, max: 100}).success).toBe(false);
-        expect(parsePagination(new URLSearchParams("limit=20&offset=10"), {limit: 5, max: 100})).toEqual({
+        expect(
+            parsePagination(new URLSearchParams("limit=-1"), {limit: 20, max: 100}).success,
+        ).toBe(false);
+        expect(
+            parsePagination(new URLSearchParams("limit=20&offset=10"), {limit: 5, max: 100}),
+        ).toEqual({
             success: true,
-            data: {limit: 20, offset: 10}
+            data: {limit: 20, offset: 10},
         });
     });
 });

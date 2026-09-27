@@ -14,11 +14,17 @@ import {site} from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({params}: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+export async function generateMetadata({
+                                           params,
+                                       }: {
+    params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
     try {
         const {slug} = await params;
         const record = await getProject(slug);
-        if (!record) return {title: "Project not found"};
+        if (!record) {
+            return {title: "Project not found"};
+        }
         const project = toPublicProject(record);
         const description = project.description || project.longDescription || undefined;
         const canonical = `/projects/${project.slug}`;
@@ -31,13 +37,13 @@ export async function generateMetadata({params}: { params: Promise<{ slug: strin
                 description,
                 url: canonical,
                 type: "article",
-                images: [`${canonical}/opengraph-image`]
+                images: [`${canonical}/opengraph-image`],
             },
             twitter: {
                 card: "summary_large_image",
                 title: project.title,
                 description,
-                images: [`${canonical}/opengraph-image`]
+                images: [`${canonical}/opengraph-image`],
             },
         };
     } catch {
@@ -54,7 +60,9 @@ export default async function ProjectPage({params}: { params: Promise<{ slug: st
     } catch {
         notFound();
     }
-    if (!record) notFound();
+    if (!record) {
+        notFound();
+    }
 
     const project = toPublicProject(record);
     const summary = toProjectSummary(record);
@@ -66,87 +74,226 @@ export default async function ProjectPage({params}: { params: Promise<{ slug: st
     const areas = Array.from(new Set([...project.researchAreas, ...project.tags]));
     const methods = [...project.methods, ...project.technologies];
 
-    return <div className="site-shell">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-                "@context": "https://schema.org", "@type": "CreativeWork",
-                name: project.title, description: project.description || undefined,
-                url: `${site.url}/projects/${project.slug}`,
-                author: {"@type": "Person", name: "Zeyu Yao", url: site.portfolioUrl},
-                isPartOf: {"@type": "CollectionPage", "@id": `${site.url}/#research`},
-                keywords: areas.join(", "),
-            }).replace(/</g, "\\u003c")
-        }}/>
-        <div className="site-container">
-            <SiteHeader projects={allSummaries}/>
-            <main id="main-content" tabIndex={-1} className="project-detail">
-                <Link href="/" className="back-link"><ArrowLeft aria-hidden/>All research</Link>
-                <header className="detail-hero">
-                    <div className="detail-kicker">Research project</div>
-                    <h1>{project.title}</h1>
-                    {project.description ? <p className="detail-lede">{project.description}</p> : null}
-                    {date || project.organizations.length ? <div className="detail-meta">
-                        {date ? <span><CalendarDays aria-hidden/>{date}</span> : null}
-                        {project.organizations.map((organization) => <span
-                            key={organization.name}>{organization.name}</span>)}
-                    </div> : null}
-                    {areas.length ? <div className="tag-row detail-tags">{areas.map((tag) => <a key={tag}
-                                                                                                href={`/?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}</div> : null}
-                    <div className="detail-actions">
-                        <a href={project.target} target="_blank" rel="noopener noreferrer"
-                           className="primary-button">Open {artifactTypeLabel(project.targetType)} <ArrowUpRight
-                            aria-hidden/><span
-                            className="sr-only"> (opens in a new tab)</span></a>
-                        <CopyLinkButton path={`/projects/${project.slug}`}/>
-                    </div>
-                </header>
+    return (
+        <div className="site-shell">
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify({
+                        "@context": "https://schema.org",
+                        "@type": "CreativeWork",
+                        name: project.title,
+                        description: project.description || undefined,
+                        url: `${site.url}/projects/${project.slug}`,
+                        author: {"@type": "Person", name: "Zeyu Yao", url: site.portfolioUrl},
+                        isPartOf: {"@type": "CollectionPage", "@id": `${site.url}/#research`},
+                        keywords: areas.join(", "),
+                    }).replace(/</g, "\\u003c"),
+                }}
+            />
+            <div className="site-container">
+                <SiteHeader projects={allSummaries}/>
+                <main id="main-content" tabIndex={-1} className="project-detail">
+                    <Link href="/" className="back-link">
+                        <ArrowLeft aria-hidden/>
+                        All research
+                    </Link>
+                    <header className="detail-hero">
+                        <div className="detail-kicker">Research project</div>
+                        <h1>{project.title}</h1>
+                        {project.description ? (
+                            <p className="detail-lede">{project.description}</p>
+                        ) : null}
+                        {date || project.organizations.length ? (
+                            <div className="detail-meta">
+                                {date ? (
+                                    <span>
+                                        <CalendarDays aria-hidden/>
+                                        {date}
+                                    </span>
+                                ) : null}
+                                {project.organizations.map((organization) => (
+                                    <span key={organization.name}>{organization.name}</span>
+                                ))}
+                            </div>
+                        ) : null}
+                        {areas.length ? (
+                            <div className="tag-row detail-tags">
+                                {areas.map((tag) => (
+                                    <a key={tag} href={`/?tag=${encodeURIComponent(tag)}`}>
+                                        {tag}
+                                    </a>
+                                ))}
+                            </div>
+                        ) : null}
+                        <div className="detail-actions">
+                            <a
+                                href={project.target}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="primary-button"
+                            >
+                                Open {artifactTypeLabel(project.targetType)}{" "}
+                                <ArrowUpRight aria-hidden/>
+                                <span className="sr-only"> (opens in a new tab)</span>
+                            </a>
+                            <CopyLinkButton path={`/projects/${project.slug}`}/>
+                        </div>
+                    </header>
 
-                <div className="detail-layout">
-                    <div className="detail-main">
-                        {project.longDescription ? <section><h2>About this research</h2>
-                            <div className="prose-copy">{project.longDescription.split("\n").map((line, index) => line ?
-                                <p key={index}>{line}</p> : null)}</div>
-                        </section> : null}
-                        {photoSet?.slides.length ?
-                            <section><h2>Project gallery</h2><ConferenceCarousel slides={photoSet.slides}
-                                                                                 caption={photoSet.title}/>
-                            </section> : null}
-                        {artifacts.length ? <section><h2>Research outputs</h2>
-                            <div className="artifact-grid">{artifacts.map((artifact) => <ArtifactLink
-                                key={`${artifact.type}:${artifact.title}:${artifact.url}`} artifact={artifact}/>)}</div>
-                        </section> : null}
-                        {project.collaborators.length ? <section><h2>Collaborators</h2>
-                            <div className="people-list">{project.collaborators.map((person) => <div key={person.name}>
-                                <Users aria-hidden/><p><strong>{person.name}</strong>{person.role ?
-                                <span>{person.role}</span> : null}</p>{person.url ?
-                                <a href={person.url} target="_blank" rel="noopener noreferrer">Profile <ArrowUpRight
-                                    aria-hidden/></a> : null}</div>)}</div>
-                        </section> : null}
+                    <div className="detail-layout">
+                        <div className="detail-main">
+                            {project.longDescription ? (
+                                <section>
+                                    <h2>About this research</h2>
+                                    <div className="prose-copy">
+                                        {project.longDescription
+                                            .split("\n")
+                                            .map((line, index) =>
+                                                line ? <p key={index}>{line}</p> : null,
+                                            )}
+                                    </div>
+                                </section>
+                            ) : null}
+                            {photoSet?.slides.length ? (
+                                <section>
+                                    <h2>Project gallery</h2>
+                                    <ConferenceCarousel
+                                        slides={photoSet.slides}
+                                        caption={photoSet.title}
+                                    />
+                                </section>
+                            ) : null}
+                            {artifacts.length ? (
+                                <section>
+                                    <h2>Research outputs</h2>
+                                    <div className="artifact-grid">
+                                        {artifacts.map((artifact) => (
+                                            <ArtifactLink
+                                                key={`${artifact.type}:${artifact.title}:${artifact.url}`}
+                                                artifact={artifact}
+                                            />
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
+                            {project.collaborators.length ? (
+                                <section>
+                                    <h2>Collaborators</h2>
+                                    <div className="people-list">
+                                        {project.collaborators.map((person) => (
+                                            <div key={person.name}>
+                                                <Users aria-hidden/>
+                                                <p>
+                                                    <strong>{person.name}</strong>
+                                                    {person.role ? (
+                                                        <span>{person.role}</span>
+                                                    ) : null}
+                                                </p>
+                                                {person.url ? (
+                                                    <a
+                                                        href={person.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        Profile <ArrowUpRight aria-hidden/>
+                                                    </a>
+                                                ) : null}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </section>
+                            ) : null}
+                        </div>
+                        <aside className="detail-aside" aria-label="Project facts">
+                            {areas.length ? (
+                                <section>
+                                    <h2>Research areas</h2>
+                                    <ul>
+                                        {areas.map((area) => (
+                                            <li key={area}>
+                                                <a href={`/?tag=${encodeURIComponent(area)}`}>
+                                                    {area}
+                                                </a>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ) : null}
+                            {methods.length ? (
+                                <section>
+                                    <h2>
+                                        <FlaskConical aria-hidden/>
+                                        Methods &amp; technologies
+                                    </h2>
+                                    <ul>
+                                        {methods.map((method) => (
+                                            <li key={method}>{method}</li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ) : null}
+                            {project.organizations.length ? (
+                                <section>
+                                    <h2>Organizations</h2>
+                                    <ul>
+                                        {project.organizations.map((organization) => (
+                                            <li key={organization.name}>
+                                                {organization.url ? (
+                                                    <a
+                                                        href={organization.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {organization.name}
+                                                    </a>
+                                                ) : (
+                                                    organization.name
+                                                )}
+                                                {organization.role ? (
+                                                    <small>{organization.role}</small>
+                                                ) : null}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            ) : null}
+                        </aside>
                     </div>
-                    <aside className="detail-aside" aria-label="Project facts">
-                        {areas.length ? <section><h2>Research areas</h2>
-                            <ul>{areas.map((area) => <li key={area}><a
-                                href={`/?tag=${encodeURIComponent(area)}`}>{area}</a></li>)}</ul>
-                        </section> : null}
-                        {methods.length ? <section><h2><FlaskConical aria-hidden/>Methods &amp; technologies</h2>
-                            <ul>{methods.map((method) => <li key={method}>{method}</li>)}</ul>
-                        </section> : null}
-                        {project.organizations.length ? <section><h2>Organizations</h2>
-                            <ul>{project.organizations.map((organization) => <li
-                                key={organization.name}>{organization.url ? <a href={organization.url} target="_blank"
-                                                                               rel="noopener noreferrer">{organization.name}</a> : organization.name}{organization.role ?
-                                <small>{organization.role}</small> : null}</li>)}</ul>
-                        </section> : null}
-                    </aside>
-                </div>
 
-                {related.length ? <section className="related-research">
-                    <div><p className="section-kicker">Continue exploring</p><h2>Related research</h2></div>
-                    <div className="related-grid">{related.map((item) => <a key={item.slug}
-                                                                            href={item.detailUrl}><span>{item.researchAreas.filter((area) => areas.some((value) => value.toLowerCase() === area.toLowerCase())).slice(0, 2).join(" · ")}</span><strong>{item.title}</strong>
-                        <p>{item.description}</p><em>View project <ArrowUpRight aria-hidden/></em></a>)}</div>
-                </section> : null}
-            </main>
+                    {related.length ? (
+                        <section className="related-research">
+                            <div>
+                                <p className="section-kicker">Continue exploring</p>
+                                <h2>Related research</h2>
+                            </div>
+                            <div className="related-grid">
+                                {related.map((item) => (
+                                    <a key={item.slug} href={item.detailUrl}>
+                                        <span>
+                                            {item.researchAreas
+                                                .filter((area) =>
+                                                    areas.some(
+                                                        (value) =>
+                                                            value.toLowerCase() ===
+                                                            area.toLowerCase(),
+                                                    ),
+                                                )
+                                                .slice(0, 2)
+                                                .join(" · ")}
+                                        </span>
+                                        <strong>{item.title}</strong>
+                                        <p>{item.description}</p>
+                                        <em>
+                                            View project <ArrowUpRight aria-hidden/>
+                                        </em>
+                                    </a>
+                                ))}
+                            </div>
+                        </section>
+                    ) : null}
+                </main>
+            </div>
         </div>
-    </div>;
+    );
 }

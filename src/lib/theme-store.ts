@@ -9,8 +9,15 @@ import {
 
 type AppearanceStorage = Pick<Storage, "getItem" | "setItem">;
 type ColorScheme = Pick<MediaQueryList, "matches" | "addEventListener" | "removeEventListener">;
-type AppearanceSnapshot = Appearance & { resolvedMode: "light" | "dark"; storageAvailable: boolean };
-const serverSnapshot: AppearanceSnapshot = {...defaultAppearance, resolvedMode: "light", storageAvailable: true};
+type AppearanceSnapshot = Appearance & {
+    resolvedMode: "light" | "dark";
+    storageAvailable: boolean;
+};
+const serverSnapshot: AppearanceSnapshot = {
+    ...defaultAppearance,
+    resolvedMode: "light",
+    storageAvailable: true,
+};
 
 export function createAppearanceStore(
     storage: () => AppearanceStorage,
@@ -25,10 +32,16 @@ export function createAppearanceStore(
     let cleanup: (() => void) | undefined;
 
     function refreshSnapshot() {
-        const resolvedMode = preferences.mode === "system"
-            ? (colorScheme().matches ? "dark" : "light") : preferences.mode;
+        const resolvedMode =
+            preferences.mode === "system"
+                ? colorScheme().matches
+                    ? "dark"
+                    : "light"
+                : preferences.mode;
         const next = {...preferences, resolvedMode, storageAvailable} as AppearanceSnapshot;
-        if (JSON.stringify(next) !== JSON.stringify(snapshot)) snapshot = next;
+        if (JSON.stringify(next) !== JSON.stringify(snapshot)) {
+            snapshot = next;
+        }
     }
 
     function persist() {
@@ -40,7 +53,9 @@ export function createAppearanceStore(
     }
 
     function read() {
-        if (!storageAvailable) return;
+        if (!storageAvailable) {
+            return;
+        }
         try {
             const raw = storage().getItem(appearanceStorageKey);
             if (raw !== null) {
@@ -70,12 +85,16 @@ export function createAppearanceStore(
 
     function notify() {
         refreshSnapshot();
-        listeners.forEach(listener => listener());
+        listeners.forEach((listener) => listener());
     }
 
     function update(patch: Partial<Omit<Appearance, "version">>) {
         getSnapshot();
-        preferences = normalizeAppearance({...preferences, ...patch}, defaultAppearance, appearanceOptions);
+        preferences = normalizeAppearance(
+            {...preferences, ...patch},
+            defaultAppearance,
+            appearanceOptions,
+        );
         persist();
         notify();
     }
@@ -91,7 +110,9 @@ export function createAppearanceStore(
                 const media = colorScheme();
                 const onStorage = (event: Event) => {
                     const key = (event as StorageEvent).key;
-                    if (key !== null && key !== undefined && key !== appearanceStorageKey) return;
+                    if (key !== null && key !== undefined && key !== appearanceStorageKey) {
+                        return;
+                    }
                     read();
                     notify();
                 };
@@ -114,7 +135,7 @@ export function createAppearanceStore(
         },
         update,
         selectPreset(id: Appearance["preset"]) {
-            const preset = presets.find(item => item.id === id)!;
+            const preset = presets.find((item) => item.id === id)!;
             update({preset: preset.id, accent: preset.accent, font: preset.font});
         },
         toggle() {

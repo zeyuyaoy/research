@@ -51,6 +51,7 @@ ORCID responses are cached for one hour.
 ### Quality checks
 
 ```bash
+bun run format:check
 bun run lint
 bun run typecheck
 bun run test
@@ -59,6 +60,8 @@ bun run check
 ```
 
 Use `bun run test:watch` for watch mode and `bun run start` to serve a production build. Tests use Vitest, so invoke `bun run test` rather than Bun's built-in `bun test` runner. Commit `bun.lock` when dependencies change; local setup and CI both install from this lockfile.
+
+Use `bun run format` to apply consistent spacing and wrap code at a 100-column target. ESLint requires braces for all control-flow bodies, including single-line `if` statements. Formatting is checked by `bun run check` and CI.
 
 ### Deployment
 

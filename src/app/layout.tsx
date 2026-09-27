@@ -18,7 +18,7 @@ const comic = Comic_Neue({
     weight: ["400", "700"],
     variable: "--font-comic",
     display: "swap",
-    preload: false
+    preload: false,
 });
 
 export const metadata: Metadata = {
@@ -29,15 +29,18 @@ export const metadata: Metadata = {
     manifest: "/site.webmanifest",
     alternates: {canonical: "/"},
     openGraph: {
-        type: "website", url: "/", siteName: "Zeyu Yao · Research",
-        title: "Research | Zeyu Yao", description: site.description,
+        type: "website",
+        url: "/",
+        siteName: "Zeyu Yao · Research",
+        title: "Research | Zeyu Yao",
+        description: site.description,
         images: ["/opengraph-image"],
     },
     twitter: {
         card: "summary_large_image",
         title: "Research | Zeyu Yao",
         description: site.description,
-        images: ["/opengraph-image"]
+        images: ["/opengraph-image"],
     },
     icons: {
         icon: {url: "/favicon-32x32.png", type: "image/png", sizes: "32x32"},
@@ -63,11 +66,16 @@ export default function RootLayout({
     return (
         <html lang="en" className={`${nunito.variable} ${comic.variable}`} suppressHydrationWarning>
         <head>
-            <script id="appearance-initializer" dangerouslySetInnerHTML={{__html: appearanceBootstrapScript()}}/>
+            <script
+                id="appearance-initializer"
+                dangerouslySetInnerHTML={{__html: appearanceBootstrapScript()}}
+            />
         </head>
         <body>
         <AppearanceRuntime/>
-        <a className="skip-link" href="#main-content">Skip to content</a>
+        <a className="skip-link" href="#main-content">
+            Skip to content
+        </a>
         <div className="site-body">{children}</div>
         <SiteFooter/>
         <Analytics/>

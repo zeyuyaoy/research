@@ -55,7 +55,9 @@ describe("command palette", () => {
         trigger.focus();
         const close = vi.fn();
         render(<CommandPalette open onClose={close} projects={[project]}/>);
-        const input = await screen.findByRole("combobox", {name: "Search projects or run a command"});
+        const input = await screen.findByRole("combobox", {
+            name: "Search projects or run a command",
+        });
         await waitFor(() => expect(input).toHaveFocus());
         fireEvent.change(input, {target: {value: "biology"}});
         const selected = screen.getByRole("option", {name: "Biology"});

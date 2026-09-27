@@ -1,5 +1,5 @@
 import type {RedisClientType} from "redis";
-import {CollectionRecord, isHttpUrl, parseCollection, parseMetadata, ProjectRecord, projectSource} from "./models";
+import {CollectionRecord, isHttpUrl, parseCollection, parseMetadata, ProjectRecord, projectSource,} from "./models";
 import {getRedisClient} from "./redis";
 
 export interface DirectorySnapshot {
@@ -19,8 +19,11 @@ export function invalidateDirectoryCache() {
 export async function scanKeys(redis: RedisClientType, pattern: string): Promise<string[]> {
     const keys: string[] = [];
     for await (const batch of redis.scanIterator({MATCH: pattern, COUNT: 100})) {
-        if (Array.isArray(batch)) keys.push(...batch);
-        else keys.push(batch as string);
+        if (Array.isArray(batch)) {
+            keys.push(...batch);
+        } else {
+            keys.push(batch as string);
+        }
     }
     return keys;
 }
@@ -43,13 +46,15 @@ async function loadProjects(redis: RedisClientType): Promise<ProjectRecord[]> {
             const target = values[index * 3] as unknown as string | null;
             const clicks = values[index * 3 + 1] as unknown as string | null;
             const meta = values[index * 3 + 2] as unknown as Record<string, string>;
-            if (!target || !isHttpUrl(target)) return;
+            if (!target || !isHttpUrl(target)) {
+                return;
+            }
             projects.push({
                 slug,
                 target,
                 clicks: Number(clicks || 0),
                 source: projectSource(slug),
-                metadata: parseMetadata(slug, meta || {})
+                metadata: parseMetadata(slug, meta || {}),
             });
         });
     }
@@ -64,20 +69,34 @@ async function loadCollections(redis: RedisClientType): Promise<CollectionRecord
         const pipeline = redis.multi();
         batch.forEach((key) => pipeline.hGetAll(key));
         const values = await pipeline.exec();
-        batch.forEach((key, index) => collections.push(parseCollection(key.slice("collection:".length), (values[index] as unknown as Record<string, string>) || {})));
+        batch.forEach((key, index) =>
+            collections.push(
+                parseCollection(
+                    key.slice("collection:".length),
+                    (values[index] as unknown as Record<string, string>) || {},
+                ),
+            ),
+        );
     }
     return collections;
 }
 
 async function loadDirectorySnapshot(): Promise<DirectorySnapshot> {
     const redis = await getRedisClient();
-    const [projects, collections] = await Promise.all([loadProjects(redis as RedisClientType), loadCollections(redis as RedisClientType)]);
+    const [projects, collections] = await Promise.all([
+        loadProjects(redis as RedisClientType),
+        loadCollections(redis as RedisClientType),
+    ]);
     return {projects, collections};
 }
 
 export async function getDirectorySnapshot(options?: { fresh?: boolean }) {
-    if (!options?.fresh && cachedSnapshot && cachedSnapshot.expiresAt > Date.now()) return cachedSnapshot.value;
-    if (!options?.fresh && pendingSnapshot) return pendingSnapshot;
+    if (!options?.fresh && cachedSnapshot && cachedSnapshot.expiresAt > Date.now()) {
+        return cachedSnapshot.value;
+    }
+    if (!options?.fresh && pendingSnapshot) {
+        return pendingSnapshot;
+    }
     pendingSnapshot = loadDirectorySnapshot().then((value) => {
         cachedSnapshot = {value, expiresAt: Date.now() + CACHE_TTL_MS};
         return value;
@@ -91,7 +110,19 @@ export async function getDirectorySnapshot(options?: { fresh?: boolean }) {
 
 export async function getProject(slug: string): Promise<ProjectRecord | null> {
     const redis = await getRedisClient();
-    const [target, count, meta] = await Promise.all([redis.get(`link:${slug}`), redis.get(`count:${slug}`), redis.hGetAll(`meta:${slug}`)]);
-    if (!target || !isHttpUrl(target)) return null;
-    return {slug, target, clicks: Number(count || 0), source: projectSource(slug), metadata: parseMetadata(slug, meta)};
+    const [target, count, meta] = await Promise.all([
+        redis.get(`link:${slug}`),
+        redis.get(`count:${slug}`),
+        redis.hGetAll(`meta:${slug}`),
+    ]);
+    if (!target || !isHttpUrl(target)) {
+        return null;
+    }
+    return {
+        slug,
+        target,
+        clicks: Number(count || 0),
+        source: projectSource(slug),
+        metadata: parseMetadata(slug, meta),
+    };
 }

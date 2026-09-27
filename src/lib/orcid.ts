@@ -16,14 +16,18 @@ export interface NormalizedOrcidWork {
 const ORCID_PATTERN = /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/;
 
 function record(value: unknown): JsonRecord | null {
-    return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
+    return value && typeof value === "object" && !Array.isArray(value)
+        ? (value as JsonRecord)
+        : null;
 }
 
 function nestedString(value: unknown, path: string[]): string | null {
     let current: unknown = value;
     for (const key of path) {
         const next = record(current);
-        if (!next) return null;
+        if (!next) {
+            return null;
+        }
         current = next[key];
     }
     return typeof current === "string" && current.trim() ? current.trim() : null;
@@ -35,11 +39,18 @@ function targetForWork(work: JsonRecord, orcidId: string): string {
     if (Array.isArray(ids)) {
         for (const candidate of ids) {
             const id = record(candidate);
-            if (!id || String(id["external-id-type"] || "").toLowerCase() !== "doi") continue;
+            if (!id || String(id["external-id-type"] || "").toLowerCase() !== "doi") {
+                continue;
+            }
             const provided = nestedString(id, ["external-id-url", "value"]);
-            if (provided && isHttpUrl(provided)) return provided;
-            const doi = typeof id["external-id-value"] === "string" ? id["external-id-value"].trim() : "";
-            if (doi) return `https://doi.org/${encodeURI(doi)}`;
+            if (provided && isHttpUrl(provided)) {
+                return provided;
+            }
+            const doi =
+                typeof id["external-id-value"] === "string" ? id["external-id-value"].trim() : "";
+            if (doi) {
+                return `https://doi.org/${encodeURI(doi)}`;
+            }
         }
     }
     const supplied = nestedString(work, ["url", "value"]);
@@ -48,35 +59,61 @@ function targetForWork(work: JsonRecord, orcidId: string): string {
 
 export function normalizeOrcidWorks(value: unknown, orcidId: string): NormalizedOrcidWork[] {
     const groups = record(value)?.group;
-    if (!Array.isArray(groups)) return [];
+    if (!Array.isArray(groups)) {
+        return [];
+    }
     return groups.flatMap((group): NormalizedOrcidWork[] => {
         const summaries = record(group)?.["work-summary"];
-        if (!Array.isArray(summaries) || !summaries.length) return [];
+        if (!Array.isArray(summaries) || !summaries.length) {
+            return [];
+        }
         const work = record(summaries[0]);
-        if (!work || (typeof work["put-code"] !== "number" && typeof work["put-code"] !== "string")) return [];
+        if (
+            !work ||
+            (typeof work["put-code"] !== "number" && typeof work["put-code"] !== "string")
+        ) {
+            return [];
+        }
         const title = nestedString(work, ["title", "title", "value"]);
-        if (!title) return [];
+        if (!title) {
+            return [];
+        }
         const journal = nestedString(work, ["journal-title", "value"]);
-        const description = typeof work["short-description"] === "string" ? work["short-description"].trim() || journal : journal;
+        const description =
+            typeof work["short-description"] === "string"
+                ? work["short-description"].trim() || journal
+                : journal;
         const year = nestedString(work, ["publication-date", "year", "value"]);
-        return [{
-            slug: `orcid-${work["put-code"]}`, title, description, tags: journal ? [journal] : [],
-            year: year && /^\d{4}$/.test(year) ? year : null, target: targetForWork(work, orcidId)
-        }];
+        return [
+            {
+                slug: `orcid-${work["put-code"]}`,
+                title,
+                description,
+                tags: journal ? [journal] : [],
+                year: year && /^\d{4}$/.test(year) ? year : null,
+                target: targetForWork(work, orcidId),
+            },
+        ];
     });
 }
 
 export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
-    if (!ORCID_PATTERN.test(orcidId)) return [];
+    if (!ORCID_PATTERN.test(orcidId)) {
+        return [];
+    }
     try {
         const response = await fetch(`https://pub.orcid.org/v3.0/${orcidId}/works`, {
             headers: {Accept: "application/json"},
             signal: AbortSignal.timeout(5_000),
             next: {revalidate: 3_600},
         });
-        if (!response.ok) return [];
+        if (!response.ok) {
+            return [];
+        }
         const incoming = normalizeOrcidWorks(await response.json(), orcidId);
-        if (!incoming.length) return [];
+        if (!incoming.length) {
+            return [];
+        }
 
         const redis = await getRedisClient();
         const reads = redis.multi();
@@ -113,14 +150,18 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
                     methods: "[]",
                     organizations: "[]",
                     collaborators: "[]",
-                    artifacts: JSON.stringify([{
-                        type: work.target.startsWith("https://doi.org/") ? "publication" : "website",
-                        title: work.title,
-                        url: work.target,
-                        date: work.year,
-                        venue: work.tags[0] || null,
-                        featured: true,
-                    }]),
+                    artifacts: JSON.stringify([
+                        {
+                            type: work.target.startsWith("https://doi.org/")
+                                ? "publication"
+                                : "website",
+                            title: work.title,
+                            url: work.target,
+                            date: work.year,
+                            venue: work.tags[0] || null,
+                            featured: true,
+                        },
+                    ]),
                     createdAt,
                     updatedAt: "",
                     startDate: work.year || "",
@@ -141,14 +182,20 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
                     title: meta?.title || work.title,
                     description: meta?.description || work.description,
                     tags: meta?.tags ? parsed.tags : work.tags,
-                    artifacts: parsed.artifacts.length ? parsed.artifacts : [{
-                        type: work.target.startsWith("https://doi.org/") ? "publication" : "website",
-                        title: work.title,
-                        url: work.target,
-                        date: work.year,
-                        venue: work.tags[0] || null,
-                        featured: true,
-                    }],
+                    artifacts: parsed.artifacts.length
+                        ? parsed.artifacts
+                        : [
+                            {
+                                type: work.target.startsWith("https://doi.org/")
+                                    ? "publication"
+                                    : "website",
+                                title: work.title,
+                                url: work.target,
+                                date: work.year,
+                                venue: work.tags[0] || null,
+                                featured: true,
+                            },
+                        ],
                     createdAt,
                     startDate: meta?.startDate || work.year,
                     endDate: meta?.endDate || work.year,
@@ -161,7 +208,10 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
         }
         return projects;
     } catch (error) {
-        console.error("ORCID synchronization failed:", error instanceof Error ? error.message : "unknown error");
+        console.error(
+            "ORCID synchronization failed:",
+            error instanceof Error ? error.message : "unknown error",
+        );
         return [];
     }
 }

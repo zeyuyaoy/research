@@ -1,4 +1,3 @@
-// Adapted from the parent portfolio; browser preferences remain origin-local.
 export const appearanceOptions = {
     preset: ["sundaze", "everyday", "editorial", "goofball"],
     mode: ["system", "light", "dark"],
@@ -13,15 +12,20 @@ export type Appearance = { version: 1 } & {
 };
 
 export const presets = [
-    {id: "sundaze", name: "Sundaze", accent: "sage", font: "rounded"},
-    {id: "everyday", name: "Everyday", accent: "ocean", font: "sans"},
-    {id: "editorial", name: "Editorial", accent: "terracotta", font: "serif"},
-    {id: "goofball", name: "Goofball", accent: "lavender", font: "comic"},
+    { id: "sundaze", name: "Sundaze", accent: "sage", font: "rounded" },
+    { id: "everyday", name: "Everyday", accent: "ocean", font: "sans" },
+    { id: "editorial", name: "Editorial", accent: "terracotta", font: "serif" },
+    { id: "goofball", name: "Goofball", accent: "lavender", font: "comic" },
 ] as const;
 
 export const defaultAppearance: Appearance = {
-    version: 1, preset: "sundaze", mode: "system", accent: "sage", font: "rounded",
-    size: "standard", motion: "system",
+    version: 1,
+    preset: "sundaze",
+    mode: "system",
+    accent: "sage",
+    font: "rounded",
+    size: "standard",
+    motion: "system",
 };
 
 export const appearanceStorageKey = "portfolio-appearance";
@@ -32,13 +36,16 @@ export function normalizeAppearance(
     options: typeof appearanceOptions,
 ): Appearance {
     if (!value || typeof value !== "object" || !("version" in value) || value.version !== 1) {
-        return {...defaults};
+        return { ...defaults };
     }
-    const result = {...defaults};
+    const result = { ...defaults };
     for (const key of Object.keys(options) as (keyof typeof options)[]) {
         const candidate = (value as Record<string, unknown>)[key];
-        if (typeof candidate === "string" && (options[key] as readonly string[]).includes(candidate)) {
-            Object.assign(result, {[key]: candidate});
+        if (
+            typeof candidate === "string" &&
+            (options[key] as readonly string[]).includes(candidate)
+        ) {
+            Object.assign(result, { [key]: candidate });
         }
     }
 

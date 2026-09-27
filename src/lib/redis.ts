@@ -17,16 +17,21 @@ export function getRedisUrl(): string | null {
 
 export async function getRedisClient(): Promise<RedisClient> {
     const redisUrl = getRedisUrl();
-    if (!redisUrl) throw new RedisUnavailableError("Redis is not configured");
-    if (client?.isReady) return client;
-    if (connection) return connection;
+    if (!redisUrl) {
+        throw new RedisUnavailableError("Redis is not configured");
+    }
+    if (client?.isReady) {
+        return client;
+    }
+    if (connection) {
+        return connection;
+    }
 
     const nextClient = createClient({
         url: redisUrl,
         socket: {connectTimeout: 3_000, reconnectStrategy: false},
     });
     nextClient.on("error", () => {
-        // Route handlers translate connection failures into a stable 503 response.
     });
 
     connection = nextClient
@@ -36,7 +41,9 @@ export async function getRedisClient(): Promise<RedisClient> {
             return nextClient;
         })
         .catch(() => {
-            if (nextClient.isOpen) nextClient.destroy();
+            if (nextClient.isOpen) {
+                nextClient.destroy();
+            }
             throw new RedisUnavailableError();
         })
         .finally(() => {
@@ -46,7 +53,9 @@ export async function getRedisClient(): Promise<RedisClient> {
 }
 
 export async function closeRedisClient() {
-    if (client?.isOpen) await client.quit();
+    if (client?.isOpen) {
+        await client.quit();
+    }
     client = null;
     connection = null;
 }
