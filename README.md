@@ -14,7 +14,7 @@ This app allows you to organize research projects with tags, descriptions, and l
 ### Requirements
 
 - Node.js 20.9 or newer
-- pnpm 10.12.1 (the version pinned by `packageManager`)
+- Bun 1.4.2 (the version pinned by `packageManager`)
 - Redis 6 or newer; use an authenticated TLS connection in production
 
 ### Local setup
@@ -22,9 +22,9 @@ This app allows you to organize research projects with tags, descriptions, and l
 ```bash
 git clone https://github.com/zeyuyaoy/research.git
 cd research
-pnpm install --frozen-lockfile
+bun install --frozen-lockfile
 cp .env.example .env.local
-pnpm dev
+bun run dev
 ```
 
 Configure `.env.local` before opening the site:
@@ -51,12 +51,14 @@ ORCID responses are cached for one hour.
 ### Quality checks
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm check
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+bun run check
 ```
+
+Use `bun run test:watch` for watch mode and `bun run start` to serve a production build. Tests use Vitest, so invoke `bun run test` rather than Bun's built-in `bun test` runner. Commit `bun.lock` when dependencies change; local setup and CI both install from this lockfile.
 
 ### Deployment
 
