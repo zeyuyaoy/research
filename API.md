@@ -3,7 +3,7 @@
 ## Authentication
 
 ```bash
-curl https://your-site.example/api/auth \
+curl https://research.zeyuyaoy.com/api/auth \
   -H "x-admin-key: $ADMIN_KEY"
 ```
 
@@ -17,15 +17,15 @@ curl https://your-site.example/api/auth \
 - `offset`: non-negative integer; default 0
 
 ```bash
-curl "https://your-site.example/api/directory?tag=genomics&source=manual&limit=20"
+curl "https://research.zeyuyaoy.com/api/directory?tag=genomics&source=manual&limit=20"
 ```
 
-Each project includes `slug`, `target`, `shortUrl`, both descriptions, tags, research areas, technologies, methods, organizations, collaborators, typed artifacts, source, dates, repository URL, photo-set ID, and timestamps.
+Each project includes `slug`, `target`, resolved `targetType`, `shortUrl`, both descriptions, tags, research areas, technologies, methods, organizations, collaborators, typed artifacts, source, dates, repository URL, photo-set ID, and timestamps.
 
 ### `GET /api/search`
 
 ```bash
-curl "https://your-site.example/api/search?q=protein&tag=bioinformatics&source=orcid"
+curl "https://research.zeyuyaoy.com/api/search?q=protein&tag=bioinformatics&source=orcid"
 ```
 
 Search matches titles, descriptions, dates, tags and research areas, organizations, collaborators, methods, technologies, artifact metadata/domains, slug, target, and source. `tag` may be repeated or comma-separated and uses case-insensitive match-all semantics. Optional `year`, `source`, `sort` (`newest`, `oldest`, `title-asc`, or `title-desc`), `limit`, and `offset` parameters are supported. Results add a numeric `score` and plain-text `highlights` arrays.
@@ -37,7 +37,7 @@ All project routes require authentication.
 ### Create: `POST /api/links`
 
 ```bash
-curl -X POST https://your-site.example/api/links \
+curl -X POST https://research.zeyuyaoy.com/api/links \
   -H "content-type: application/json" \
   -H "x-admin-key: $ADMIN_KEY" \
   -d '{
@@ -61,9 +61,15 @@ curl -X POST https://your-site.example/api/links \
 
 `slug` and an HTTP(S) `target` are required. Titles are optional and fall back to the normalized slug; the server does not fetch the target page. A `{ "links": [...] }` body creates multiple projects and returns per-entry results.
 
+Optional `targetType` overrides the primary link's resource type. Accepted values are `publication`, `preprint`, `poster`, `talk`, `presentation`, `award`, `code`, `dataset`, `video`, `file`, `website`, and `other`. These same values are supported for artifact `type`. Invalid primary-link types return `400`.
+
+On creation, an omitted or null `targetType` selects automatic detection. On update, omission preserves the current override and `null` clears it. Authenticated project responses expose this nullable override in `metadata.targetType`; JSON/YAML exports preserve it and CSV uses an empty cell for automatic detection. Public directory/search responses expose the resolved `targetType`: explicit override, matching artifact type, then conservative URL inference. Unknown destinations use `website`.
+
 ### Update: `PUT /api/links`
 
 Send `slug` and the fields to change. The slug itself is immutable. A project object, an array, or `{ "links": [...] }` is accepted.
+
+For example, `{ "slug": "protein-localization", "targetType": "file" }` sets a link type. `{ "slug": "protein-localization", "githubRepo": "" }` removes only the repository attachment, retaining the project and its primary URL.
 
 ### Read: `GET /api/links`
 
@@ -122,7 +128,7 @@ Counts are all-time raw successful redirect requests. Historical week/month/year
 `GET /api/export` requires authentication. `format` may be `json`, `csv`, or `yaml`; unknown values return `400`. Optional filters are `source`, `tag`, and `includeClicks=false`.
 
 ```bash
-curl "https://your-site.example/api/export?format=csv" \
+curl "https://research.zeyuyaoy.com/api/export?format=csv" \
   -H "x-admin-key: $ADMIN_KEY" \
   -o research.csv
 ```

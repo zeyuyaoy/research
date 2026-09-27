@@ -11,20 +11,20 @@ export default function Image() {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        background: "#f7f5ef",
-        color: "#17211d",
+        background: "#fdfbf8",
+        color: "#2b2620",
         padding: "72px 84px",
         fontFamily: "sans-serif"
     }}>
-        <div style={{display: "flex", color: "#47705f", fontSize: 28, letterSpacing: 3, textTransform: "uppercase"}}>A
+        <div style={{display: "flex", color: "#496f61", fontSize: 28, letterSpacing: 3, textTransform: "uppercase"}}>A
             growing body of work
         </div>
         <div style={{display: "flex", flexDirection: "column", gap: 28}}>
-            <div style={{display: "flex", fontSize: 76, fontWeight: 700}}>Peter&#39;s Research Projects</div>
-            <div style={{display: "flex", fontSize: 34, color: "#5d665f"}}>Projects, publications, talks, and research
+            <div style={{display: "flex", fontSize: 76, fontWeight: 700}}>Zeyu Yao · Research</div>
+            <div style={{display: "flex", fontSize: 34, color: "#6b6660"}}>Projects, publications, talks, and research
                 outputs.
             </div>
         </div>
-        <div style={{display: "flex", fontSize: 24, color: "#47705f"}}>{researchHostname}</div>
+        <div style={{display: "flex", fontSize: 24, color: "#496f61"}}>{researchHostname}</div>
     </div>, size);
 }

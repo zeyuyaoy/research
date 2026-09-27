@@ -1,7 +1,7 @@
 export type ProjectSource = "manual" | "orcid";
 
 export const ARTIFACT_TYPES = [
-    "publication", "preprint", "poster", "talk", "presentation", "award", "code", "dataset", "video", "website", "other",
+    "publication", "preprint", "poster", "talk", "presentation", "award", "code", "dataset", "video", "file", "website", "other",
 ] as const;
 
 export type ArtifactType = typeof ARTIFACT_TYPES[number];
@@ -22,6 +22,7 @@ export interface ProjectArtifact {
 }
 
 export interface ProjectMetadata {
+    targetType: ArtifactType | null;
     permanent: boolean;
     title: string;
     description: string | null;
@@ -52,6 +53,7 @@ export interface ProjectRecord {
 export interface PublicProject {
     slug: string;
     target: string;
+    targetType: ArtifactType;
     shortUrl: string;
     title: string;
     description: string | null;
@@ -97,6 +99,7 @@ export interface AnalyticsSummary {
 export interface ProjectInput {
     slug: string;
     target?: string;
+    targetType?: ArtifactType | null;
     permanent?: boolean;
     title?: string;
     description?: string;
@@ -129,6 +132,39 @@ export type ValidationResult<T> =
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 const DATE_PATTERN = /^\d{4}(?:-(?:0[1-9]|1[0-2])(?:-(?:0[1-9]|[12]\d|3[01]))?)?$/;
 const ARTIFACT_TYPE_SET = new Set<string>(ARTIFACT_TYPES);
+
+function parseArtifactType(value: unknown): ArtifactType | null {
+    return typeof value === "string" && ARTIFACT_TYPE_SET.has(value) ? value as ArtifactType : null;
+}
+
+export function artifactTypeLabel(type: ArtifactType): string {
+    if (type === "code") return "source code";
+    if (type === "other") return "resource";
+    return type;
+}
+
+export function resolveTargetType(project: {
+    target: string;
+    targetType?: ArtifactType | null;
+    artifacts: ProjectArtifact[];
+}): ArtifactType {
+    if (project.targetType) return project.targetType;
+    const target = project.target;
+    const matching = project.artifacts.find(artifact => artifact.url === target);
+    if (matching) return matching.type;
+    try {
+        const {hostname, pathname} = new URL(target);
+        const onHost = (host: string) => hostname === host || hostname.endsWith(`.${host}`);
+        if (onHost("youtube.com") || hostname === "youtu.be" || /\.(mp4|webm|mov|m4v|ogv)$/i.test(pathname)) return "video";
+        if (onHost("doi.org")) return "publication";
+        if ((hostname === "drive.google.com" && pathname.startsWith("/file/d/")) ||
+            (hostname === "docs.google.com" && /^\/(document|spreadsheets|presentation|drawings)\/d\//.test(pathname)) ||
+            /\.(pdf|docx?|xlsx?|pptx?|odt|ods|odp|rtf|txt|csv|tsv|json|xml|zip|tar|gz|7z|png|jpe?g|gif|webp|svg|mp3|wav|ogg)$/i.test(pathname)) return "file";
+        if (hostname === "github.com" && /^\/[^/]+\/[^/]+/.test(pathname)) return "code";
+    } catch { /* Invalid URLs fall back to a generic website label. */
+    }
+    return "website";
+}
 
 export function normalizeSlug(value: string): string {
     return value.trim().replace(/^\/+/, "").toLowerCase();
@@ -241,6 +277,11 @@ export function validateProjectInput(value: unknown, requireTarget: boolean): Va
         success: false,
         error: "target must be a valid HTTP(S) URL"
     };
+    const targetType = raw.targetType === undefined ? undefined : parseArtifactType(raw.targetType);
+    if (raw.targetType !== undefined && raw.targetType !== null && targetType === null) return {
+        success: false,
+        error: `targetType must be null or one of: ${ARTIFACT_TYPES.join(", ")}`
+    };
     const githubRepo = optionalString(raw.githubRepo, 2048);
     if (githubRepo && !isHttpUrl(githubRepo)) return {success: false, error: "githubRepo must be a valid HTTP(S) URL"};
     const startDate = optionalString(raw.startDate, 10);
@@ -262,6 +303,7 @@ export function validateProjectInput(value: unknown, requireTarget: boolean): Va
         success: true, data: {
             slug,
             target,
+            targetType,
             permanent: raw.permanent as boolean | undefined,
             title: optionalString(raw.title, 240),
             description: optionalString(raw.description, 4000),
@@ -310,6 +352,7 @@ export function validateCollectionInput(value: unknown, requireName: boolean): V
 
 export function parseMetadata(slug: string, meta: Record<string, string>): ProjectMetadata {
     return {
+        targetType: parseArtifactType(meta.targetType),
         permanent: meta.permanent === "1",
         title: meta.title?.trim() || slug,
         description: meta.description?.trim() || null,
@@ -333,6 +376,7 @@ export function parseMetadata(slug: string, meta: Record<string, string>): Proje
 export function serializeProjectMetadata(input: ProjectInput, existing?: Record<string, string>): Record<string, string> {
     const now = new Date().toISOString();
     return {
+        targetType: input.targetType === undefined ? existing?.targetType || "" : input.targetType || "",
         permanent: input.permanent === undefined ? existing?.permanent || "0" : input.permanent ? "1" : "0",
         title: input.title === undefined ? existing?.title || input.slug : input.title || input.slug,
         description: input.description === undefined ? existing?.description || "" : input.description,
@@ -373,6 +417,11 @@ export function toPublicProject(project: ProjectRecord): PublicProject {
     return {
         slug: project.slug,
         target: project.target,
+        targetType: resolveTargetType({
+            target: project.target,
+            targetType: project.metadata.targetType,
+            artifacts: project.metadata.artifacts
+        }),
         shortUrl: `/${project.slug}`,
         title: project.metadata.title,
         description: project.metadata.description,
@@ -422,6 +471,12 @@ export function formatResearchDate(value: string | null | undefined): string | n
         timeZone: "UTC"
     }).format(new Date(`${year}-${month}-01T00:00:00Z`));
     return `${label} ${year}`;
+}
+
+export function formatResearchDateRange(startDate: string | null, endDate: string | null) {
+    const start = formatResearchDate(startDate);
+    const end = formatResearchDate(endDate);
+    return start && end && start !== end ? `${start}–${end}` : start || end;
 }
 
 export function researchTimestamp(project: Pick<ProjectMetadata, "startDate" | "endDate" | "createdAt">): number {

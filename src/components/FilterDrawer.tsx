@@ -2,7 +2,7 @@
 
 import {Search, X} from "lucide-react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {type ArchiveState, projectMatchesYear, type ProjectSummary} from "@/lib/archive";
+import {type ArchiveState, filterProjects, type ProjectSummary} from "@/lib/archive";
 
 export default function FilterDrawer({open, onClose, state, projects, onApply, onClear}: {
     open: boolean;
@@ -36,12 +36,7 @@ export default function FilterDrawer({open, onClose, state, projects, onApply, o
         .filter((tag) => tag.toLowerCase().includes(tagQuery.toLowerCase())).sort((a, b) => a.localeCompare(b)), [projects, tagQuery]);
     const years = useMemo(() => Array.from(new Set(projects.flatMap((project) => [project.startDate, project.endDate])
         .filter((date): date is string => Boolean(date)).map((date) => date.slice(0, 4)))).sort((a, b) => b.localeCompare(a)), [projects]);
-    const visible = useMemo(() => projects.filter((project) => {
-        if (draft.source !== "all" && project.source !== draft.source) return false;
-        if (draft.year && !projectMatchesYear(project, draft.year)) return false;
-        const areas = new Set(project.researchAreas.map((tag) => tag.toLowerCase()));
-        return draft.tags.every((tag) => areas.has(tag.toLowerCase()));
-    }).length, [draft.source, draft.tags, draft.year, projects]);
+    const visible = useMemo(() => filterProjects(projects, draft).length, [draft, projects]);
     const active = draft.tags.length + (draft.source === "all" ? 0 : 1) + (draft.year ? 1 : 0);
     return <dialog ref={dialogRef} className="filter-dialog" aria-labelledby="filter-title"
                    onCancel={(event) => {
@@ -49,11 +44,21 @@ export default function FilterDrawer({open, onClose, state, projects, onApply, o
                        dismiss();
                    }}>
         <header>
-            <div><h2 id="filter-title">Filter research</h2>{active ? <span>{active} active</span> : null}</div>
+            <div><h2 id="filter-title">Filter and sort research</h2>{active ? <span>{active} active</span> : null}</div>
             <button className="icon-button" type="button" onClick={dismiss} aria-label="Close filters"><X aria-hidden/>
             </button>
         </header>
         <div className="filter-body">
+            <label className="filter-select filter-sort"><strong>Sort by</strong><select value={draft.sort}
+                                                                                         onChange={(event) => setDraft((current) => ({
+                                                                                             ...current,
+                                                                                             sort: event.target.value as ArchiveState["sort"]
+                                                                                         }))}>
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="title-asc">Title (A–Z)</option>
+                <option value="title-desc">Title (Z–A)</option>
+            </select></label>
             <fieldset>
                 <legend>Source</legend>
                 <div className="filter-options-inline">
@@ -80,12 +85,14 @@ export default function FilterDrawer({open, onClose, state, projects, onApply, o
                                                        tags: checked ? current.tags.filter((selected) => selected.toLowerCase() !== tag.toLowerCase()) : [...current.tags, tag]
                                                    }))}/><span>{tag}</span></label>;
                 })}</div>
+                {!tags.length ?
+                    <p className="filter-empty" role="status">No research areas match “{tagQuery}”.</p> : null}
             </fieldset>
-            <label className="filter-year"><strong>Year</strong><select value={draft.year || ""}
-                                                                        onChange={(event) => setDraft((current) => ({
-                                                                            ...current,
-                                                                            year: event.target.value || null
-                                                                        }))}>
+            <label className="filter-select"><strong>Year</strong><select value={draft.year || ""}
+                                                                          onChange={(event) => setDraft((current) => ({
+                                                                              ...current,
+                                                                              year: event.target.value || null
+                                                                          }))}>
                 <option value="">Any year</option>
                 {years.map((year) => <option key={year} value={year}>{year}</option>)}
             </select></label>

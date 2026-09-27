@@ -4,6 +4,8 @@ import {FormEvent, useCallback, useEffect, useMemo, useState} from "react";
 import {
     type AnalyticsSummary,
     ARTIFACT_TYPES,
+    type ArtifactType,
+    artifactTypeLabel,
     type CollectionRecord,
     type NamedEntity,
     type ProjectArtifact,
@@ -12,16 +14,31 @@ import {
 
 type Tab = "projects" | "collections" | "analytics";
 type ProjectForm = {
-    slug: string; target: string; title: string; description: string; longDescription: string; tags: string;
-    researchAreas: string[]; technologies: string[]; methods: string[];
-    organizations: NamedEntity[]; collaborators: NamedEntity[]; artifacts: ProjectArtifact[];
-    permanent: boolean; startDate: string; endDate: string; githubRepo: string; photoSetId: string;
+    slug: string;
+    target: string;
+    targetType: ArtifactType | null;
+    title: string;
+    description: string;
+    longDescription: string;
+    tags: string;
+    researchAreas: string[];
+    technologies: string[];
+    methods: string[];
+    organizations: NamedEntity[];
+    collaborators: NamedEntity[];
+    artifacts: ProjectArtifact[];
+    permanent: boolean;
+    startDate: string;
+    endDate: string;
+    githubRepo: string;
+    photoSetId: string;
 };
 type CollectionForm = { id: string; name: string; description: string; tags: string; projects: string[] };
 
 const EMPTY_PROJECT: ProjectForm = {
     slug: "",
     target: "",
+    targetType: null,
     title: "",
     description: "",
     longDescription: "",
@@ -203,9 +220,22 @@ function ProjectEditorState({initial, editing, onCancel, onSave, busy}: ProjectE
             slug.</p></div>
         <div className="grid gap-4 md:grid-cols-2"><TextField label="Slug" value={form.slug}
                                                               onChange={(value) => field("slug", value)} required
-                                                              disabled={editing} placeholder="project-slug"/><TextField
+                                                              disabled={editing} placeholder="project-slug"/>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2"><TextField
             label="Target URL" value={form.target} onChange={(value) => field("target", value)} required type="url"
-            placeholder="https://…"/></div>
+            placeholder="https://…"/>
+            <label className="grid gap-1 text-sm font-semibold">Link type<select value={form.targetType || ""}
+                                                                                 onChange={(event) => field("targetType", event.target.value ? event.target.value as ArtifactType : null)}
+                                                                                 className="min-h-11 rounded-lg border px-3 py-2.5 font-normal"
+                                                                                 style={{
+                                                                                     backgroundColor: "var(--input-bg)",
+                                                                                     borderColor: "var(--input-border)"
+                                                                                 }}>
+                <option value="">Automatic</option>
+                {ARTIFACT_TYPES.map(type => <option key={type} value={type}>{artifactTypeLabel(type)}</option>)}
+            </select></label>
+        </div>
         <TextField label="Title" value={form.title} onChange={(value) => field("title", value)}
                    placeholder="Optional display title"/>
         <label className="grid gap-1 text-sm font-semibold"><span>Description</span><textarea rows={4}
@@ -546,9 +576,11 @@ export default function AdminPage() {
         }
     };
 
-    if (checkingAuth) return <main className="grid min-h-screen place-items-center"><p role="status">Checking your
+    if (checkingAuth) return <main id="main-content" tabIndex={-1} className="grid min-h-screen place-items-center"><p
+        role="status">Checking your
         session…</p></main>;
-    if (!authenticated) return <main className="grid min-h-screen place-items-center px-4"
+    if (!authenticated) return <main id="main-content" tabIndex={-1}
+                                     className="grid min-h-screen place-items-center px-4"
                                      style={{backgroundColor: "var(--background-color)"}}>
         <form onSubmit={login} className="grid w-full max-w-sm gap-4 rounded-xl border p-6 shadow-lg"
               style={{backgroundColor: "var(--card-bg)", borderColor: "var(--card-border)"}}>
@@ -568,7 +600,7 @@ export default function AdminPage() {
         </form>
     </main>;
 
-    return <main className="min-h-screen px-4 py-8 sm:px-6 lg:px-8"
+    return <main id="main-content" tabIndex={-1} className="min-h-screen px-4 py-8 sm:px-6 lg:px-8"
                  style={{backgroundColor: "var(--background-color)"}}>
         <div className="mx-auto max-w-6xl space-y-6">
             <header className="flex flex-wrap items-center justify-between gap-4">
@@ -634,6 +666,7 @@ export default function AdminPage() {
                                 <button onClick={() => setProjectForm({
                                     slug: project.slug,
                                     target: project.target,
+                                    targetType: project.metadata.targetType ?? null,
                                     title: project.metadata.title,
                                     description: project.metadata.description || "",
                                     longDescription: project.metadata.longDescription || "",

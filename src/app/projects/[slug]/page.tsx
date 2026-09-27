@@ -9,15 +9,10 @@ import SiteHeader from "@/components/SiteHeader";
 import {effectiveArtifacts, relatedProjects, toProjectSummary} from "@/lib/archive";
 import {getPhotoSet} from "@/lib/conferenceSlides";
 import {getDirectorySnapshot, getProject} from "@/lib/directory";
-import {formatResearchDate, toPublicProject} from "@/lib/models";
+import {artifactTypeLabel, formatResearchDateRange, toPublicProject} from "@/lib/models";
+import {site} from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-
-function dateLabel(start: string | null, end: string | null) {
-    const startLabel = formatResearchDate(start);
-    const endLabel = formatResearchDate(end);
-    return startLabel && endLabel && startLabel !== endLabel ? `${startLabel}–${endLabel}` : startLabel || endLabel;
-}
 
 export async function generateMetadata({params}: { params: Promise<{ slug: string }> }): Promise<Metadata> {
     try {
@@ -67,32 +62,41 @@ export default async function ProjectPage({params}: { params: Promise<{ slug: st
     const related = relatedProjects(summary, allSummaries);
     const artifacts = effectiveArtifacts(project);
     const photoSet = getPhotoSet(project.photoSetId || project.slug);
-    const date = dateLabel(project.startDate, project.endDate);
+    const date = formatResearchDateRange(project.startDate, project.endDate);
     const areas = Array.from(new Set([...project.researchAreas, ...project.tags]));
     const methods = [...project.methods, ...project.technologies];
 
     return <div className="site-shell">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+                "@context": "https://schema.org", "@type": "CreativeWork",
+                name: project.title, description: project.description || undefined,
+                url: `${site.url}/projects/${project.slug}`,
+                author: {"@type": "Person", name: "Zeyu Yao", url: site.portfolioUrl},
+                isPartOf: {"@type": "CollectionPage", "@id": `${site.url}/#research`},
+                keywords: areas.join(", "),
+            }).replace(/</g, "\\u003c")
+        }}/>
         <div className="site-container">
             <SiteHeader projects={allSummaries}/>
-            <main className="project-detail">
+            <main id="main-content" tabIndex={-1} className="project-detail">
                 <Link href="/" className="back-link"><ArrowLeft aria-hidden/>All research</Link>
                 <header className="detail-hero">
                     <div className="detail-kicker">Research project</div>
                     <h1>{project.title}</h1>
                     {project.description ? <p className="detail-lede">{project.description}</p> : null}
-                    <div className="detail-meta">
+                    {date || project.organizations.length ? <div className="detail-meta">
                         {date ? <span><CalendarDays aria-hidden/>{date}</span> : null}
                         {project.organizations.map((organization) => <span
                             key={organization.name}>{organization.name}</span>)}
-                        <span
-                            className="source-label">{project.source === "orcid" ? "ORCID record" : "Archive record"}</span>
-                    </div>
+                    </div> : null}
                     {areas.length ? <div className="tag-row detail-tags">{areas.map((tag) => <a key={tag}
                                                                                                 href={`/?tag=${encodeURIComponent(tag)}`}>{tag}</a>)}</div> : null}
                     <div className="detail-actions">
-                        <a href={project.target} target="_blank" rel="noopener noreferrer" className="primary-button">Open
-                            primary link <ArrowUpRight aria-hidden/><span
-                                className="sr-only"> (opens in a new tab)</span></a>
+                        <a href={project.target} target="_blank" rel="noopener noreferrer"
+                           className="primary-button">Open {artifactTypeLabel(project.targetType)} <ArrowUpRight
+                            aria-hidden/><span
+                            className="sr-only"> (opens in a new tab)</span></a>
                         <CopyLinkButton path={`/projects/${project.slug}`}/>
                     </div>
                 </header>

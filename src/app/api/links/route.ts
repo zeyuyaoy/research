@@ -11,17 +11,17 @@ import {
     validateProjectInput,
 } from "@/lib/models";
 import {getRedisClient} from "@/lib/redis";
+import {site} from "@/lib/site";
 
 function responseProject(
     slug: string,
     target: string,
     metadata: Record<string, string>,
     clicks: number,
-    origin: string,
 ) {
     return {
         slug,
-        short: `${origin}/${slug}`,
+        short: `${site.url}/${slug}`,
         target,
         clicks,
         metadata: parseMetadata(slug, metadata),
@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
         const requested = requestEntries(await readJson(req));
         if (!requested) return jsonError("a project or links array is required", 400);
         const redis = await getRedisClient();
-        const origin = new URL(req.url).origin;
         const results: Array<Record<string, unknown>> = [];
 
         for (const entry of requested.entries) {
@@ -66,7 +65,7 @@ export async function POST(req: NextRequest) {
             multi.set(`count:${project.slug}`, "0");
             multi.hSet(`meta:${project.slug}`, metadata);
             await multi.exec();
-            results.push(responseProject(project.slug, project.target!, metadata, 0, origin));
+            results.push(responseProject(project.slug, project.target!, metadata, 0));
         }
         invalidateDirectoryCache();
         return NextResponse.json(requested.single ? results[0] : {results}, {
@@ -85,7 +84,6 @@ export async function PUT(req: NextRequest) {
         const requested = requestEntries(await readJson(req));
         if (!requested) return jsonError("a project or links array is required", 400);
         const redis = await getRedisClient();
-        const origin = new URL(req.url).origin;
         const results: Array<Record<string, unknown>> = [];
 
         for (const entry of requested.entries) {
@@ -111,7 +109,7 @@ export async function PUT(req: NextRequest) {
             multi.hSet(`meta:${project.slug}`, metadata);
             await multi.exec();
             const clicks = Number((await redis.get(`count:${project.slug}`)) || 0);
-            results.push(responseProject(project.slug, project.target || target, metadata, clicks, origin));
+            results.push(responseProject(project.slug, project.target || target, metadata, clicks));
         }
         invalidateDirectoryCache();
         return NextResponse.json(requested.single ? results[0] : {results}, {headers: PRIVATE_HEADERS});

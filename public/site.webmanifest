@@ -1,12 +1,20 @@
 {
-  "name": "Peter's Research Projects",
+  "name": "Zeyu Yao \u00b7 Research",
   "short_name": "Research",
   "description": "A curated directory of research projects and publications.",
   "icons": [
-    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
   ],
-  "theme_color": "#3f6f5f",
-  "background_color": "#fcfaf6",
+  "theme_color": "#fdfbf8",
+  "background_color": "#fdfbf8",
   "display": "standalone"
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import {ArrowUpRight, Code2, FileText, Search} from "lucide-react";
+import {Search} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {useCallback, useEffect, useState} from "react";
@@ -20,6 +20,7 @@ export default function SiteHeader({projects, onTagSelect, onClearFilters}: {
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+                if (document.querySelector("dialog[open]")) return;
                 event.preventDefault();
                 setPaletteOpen(true);
             }
@@ -29,15 +30,15 @@ export default function SiteHeader({projects, onTagSelect, onClearFilters}: {
     }, []);
     return <>
         <header className="site-header">
-            <Link className="site-brand" href="/"><strong>Peter&#39;s Research Projects</strong><span>Per aspera ad astra!</span></Link>
+            <div className="site-brand">
+                <a href={site.portfolioUrl} aria-label="Zeyu Yao — main site"><strong>Zeyu Yao <span
+                    lang="zh">姚则禹</span></strong></a>
+                <Link href="/" className="section-link">Research</Link>
+            </div>
             <nav aria-label="Primary navigation">
-                <a href={site.resumeUrl} target="_blank" rel="noopener noreferrer"><FileText
-                    aria-hidden/>Resume<span className="sr-only"> (opens in a new tab)</span></a>
-                <a href={site.githubUrl} target="_blank" rel="noopener noreferrer"><Code2 aria-hidden/>GitHub<span
-                    className="sr-only"> (opens in a new tab)</span></a>
-                <a href={site.portfolioUrl} target="_blank" rel="noopener noreferrer">Portfolio<ArrowUpRight
-                    aria-hidden/><span className="sr-only"> (opens in a new tab)</span></a>
                 <button type="button" className="icon-button command-trigger" aria-label="Open command palette"
+                        aria-keyshortcuts="Meta+K Control+K" title="Search commands (⌘/Ctrl K)"
+                        aria-haspopup="dialog" aria-expanded={paletteOpen}
                         onClick={() => setPaletteOpen(true)}><Search aria-hidden/></button>
                 <ThemeToggle/>
             </nav>

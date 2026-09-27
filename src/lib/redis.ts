@@ -50,15 +50,3 @@ export async function closeRedisClient() {
     client = null;
     connection = null;
 }
-
-export async function checkRedisHealth(): Promise<boolean> {
-    try {
-        return (await (await getRedisClient()).ping()) === "PONG";
-    } catch {
-        return false;
-    }
-}
-
-export async function resetRedisClientForTests() {
-    await closeRedisClient();
-}

@@ -1,5 +1,5 @@
 import type {ArtifactType, ProjectArtifact, ProjectRecord, ProjectSource, PublicProject} from "./models";
-import {formatResearchDate, researchTimestamp, toPublicProject} from "./models";
+import {artifactTypeLabel, formatResearchDate, researchTimestamp, resolveTargetType, toPublicProject} from "./models";
 
 export type ArchiveSort = "newest" | "oldest" | "title-asc" | "title-desc";
 export type ArchiveView = "projects" | "timeline";
@@ -16,6 +16,7 @@ export interface ArchiveState {
 export interface ProjectSummary {
     slug: string;
     target: string;
+    targetType: ArtifactType;
     shortUrl: string;
     detailUrl: string;
     title: string;
@@ -32,15 +33,6 @@ export interface ProjectSummary {
     artifacts: ProjectArtifact[];
     searchText: string;
 }
-
-export const DEFAULT_ARCHIVE_STATE: ArchiveState = {
-    query: "",
-    tags: [],
-    source: "all",
-    year: null,
-    sort: "newest",
-    view: "projects",
-};
 
 const KNOWN_PARAMS = ["q", "tag", "source", "year", "sort", "view"];
 
@@ -82,32 +74,14 @@ export function archiveUrl(state: ArchiveState, current: string) {
     return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function artifactTypeFor(url: string): ArtifactType {
-    try {
-        const parsed = new URL(url);
-        if (parsed.hostname === "doi.org") return "publication";
-        if (parsed.hostname.includes("youtube.com") || parsed.hostname === "youtu.be") return "video";
-        if (parsed.hostname === "github.com") return "code";
-    } catch { /* Validated upstream. */
-    }
-    return "website";
-}
-
-function artifactTitle(type: ArtifactType) {
-    if (type === "publication") return "Publication";
-    if (type === "video") return "Project video";
-    if (type === "code") return "Source code";
-    return "Primary link";
-}
-
 export function effectiveArtifacts(project: PublicProject): ProjectArtifact[] {
     const artifacts = [...project.artifacts];
     const urls = new Set(artifacts.flatMap((artifact) => artifact.url ? [artifact.url] : []));
     if (!urls.has(project.target)) {
-        const type = artifactTypeFor(project.target);
+        const type = resolveTargetType(project);
         artifacts.unshift({
             type,
-            title: artifactTitle(type),
+            title: `Open ${artifactTypeLabel(type)}`,
             url: project.target,
             date: null,
             venue: null,
@@ -147,6 +121,7 @@ export function toProjectSummary(project: ProjectRecord | PublicProject): Projec
     return {
         slug: publicProject.slug,
         target: publicProject.target,
+        targetType: resolveTargetType(publicProject),
         shortUrl: publicProject.shortUrl,
         detailUrl: `/projects/${publicProject.slug}`,
         title: publicProject.title,

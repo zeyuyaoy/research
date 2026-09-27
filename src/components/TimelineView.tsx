@@ -1,10 +1,11 @@
 import {ChevronRight} from "lucide-react";
 import type {ProjectSummary} from "@/lib/archive";
 import {projectYear} from "@/lib/archive";
-import {dateLabel} from "./ProjectCard";
+import {formatResearchDateRange} from "@/lib/models";
 
-export default function TimelineView({projects, onTagSelect}: {
+export default function TimelineView({projects, onTagSelect, selectedTags = []}: {
     projects: ProjectSummary[];
+    selectedTags?: string[];
     onTagSelect: (tag: string) => void
 }) {
     const grouped = new Map<string, ProjectSummary[]>();
@@ -18,13 +19,14 @@ export default function TimelineView({projects, onTagSelect}: {
         <h2 id={`year-${year}`}>{year}</h2>
         <div className="timeline-items">{entries.map((project) => <article key={project.slug}>
             <span className="timeline-dot" aria-hidden/>
-            <div className="timeline-date">{dateLabel(project.startDate, project.endDate) || "Date unavailable"}</div>
+            <div
+                className="timeline-date">{formatResearchDateRange(project.startDate, project.endDate) || "Date unavailable"}</div>
             <a className="timeline-title" href={project.detailUrl}><strong>{project.title}</strong><ChevronRight
                 aria-hidden/></a>
             <div className="timeline-tags">{project.researchAreas.slice(0, 2).map((tag) => <button key={tag}
                                                                                                    type="button"
+                                                                                                   aria-pressed={selectedTags.some(value => value.toLowerCase() === tag.toLowerCase())}
                                                                                                    onClick={() => onTagSelect(tag)}>{tag}</button>)}</div>
         </article>)}</div>
     </section>)}</div>;
 }
-

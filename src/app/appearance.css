@@ -1,0 +1,163 @@
+:root[data-palette="everyday"] {
+    --background: #eef4f9;
+    --surface-secondary: #e6eff6;
+    --surface-color: #f4f8fc;
+    --background-color: #f4f8fc;
+    --text-color: #233442;
+    --muted-color: #536677;
+}
+
+:root[data-palette="editorial"] {
+    --background: #faf1e3;
+    --surface-secondary: #f1e6d6;
+    --surface-color: #fff9ef;
+    --background-color: #fff9ef;
+    --text-color: #382820;
+    --muted-color: #75604f;
+}
+
+:root[data-palette="goofball"] {
+    --background: #f4ecfb;
+    --surface-secondary: #eee3f6;
+    --surface-color: #fbf6ff;
+    --background-color: #fbf6ff;
+    --text-color: #34263e;
+    --muted-color: #73617f;
+}
+
+:root[data-palette="everyday"][data-theme="dark"] {
+    --background: #141f29;
+    --surface-secondary: #233440;
+    --surface-color: #1b2a35;
+    --background-color: #141f29;
+    --text-color: #e7f0f7;
+    --muted-color: #a4b7c6;
+}
+
+:root[data-palette="editorial"][data-theme="dark"] {
+    --background: #231c18;
+    --surface-secondary: #382b23;
+    --surface-color: #2c221c;
+    --background-color: #231c18;
+    --text-color: #f5e9d8;
+    --muted-color: #c0aa96;
+}
+
+:root[data-palette="goofball"][data-theme="dark"] {
+    --background: #21192b;
+    --surface-secondary: #372842;
+    --surface-color: #2b2035;
+    --background-color: #21192b;
+    --text-color: #f4eafb;
+    --muted-color: #c2adce;
+}
+
+:root[data-accent="sage"] {
+    --primary-color: #6a8e7f;
+    --link-color: #496f61;
+    --mascot-filter: hue-rotate(35deg) saturate(.47) brightness(1);
+}
+
+:root[data-accent="ocean"] {
+    --primary-color: #467b9b;
+    --link-color: #356780;
+    --mascot-filter: hue-rotate(90deg) saturate(1.19) brightness(1);
+}
+
+:root[data-accent="terracotta"] {
+    --primary-color: #a55d43;
+    --link-color: #984e37;
+    --mascot-filter: hue-rotate(-99deg) saturate(1.49) brightness(1);
+}
+
+:root[data-accent="lavender"] {
+    --primary-color: #8562a6;
+    --link-color: #72518f;
+    --mascot-filter: hue-rotate(160deg) saturate(1.23) brightness(1);
+}
+
+:root[data-theme="dark"][data-accent="sage"] {
+    --primary-color: #7ba899;
+    --link-color: #9bc3b5;
+    --mascot-filter: hue-rotate(40deg) saturate(.50) brightness(1.35);
+}
+
+:root[data-theme="dark"][data-accent="ocean"] {
+    --primary-color: #86b9d8;
+    --link-color: #9ecbe4;
+    --mascot-filter: hue-rotate(90deg) saturate(.74) brightness(1.35);
+}
+
+:root[data-theme="dark"][data-accent="terracotta"] {
+    --primary-color: #dda082;
+    --link-color: #edb69b;
+    --mascot-filter: hue-rotate(-93deg) saturate(.85) brightness(1.35);
+}
+
+:root[data-theme="dark"][data-accent="lavender"] {
+    --primary-color: #b99ad8;
+    --link-color: #cfb3e9;
+    --mascot-filter: hue-rotate(159deg) saturate(.75) brightness(1.35);
+}
+
+:root[data-accent] {
+    --accent-soft: color-mix(in srgb, var(--primary-color) 12%, transparent);
+    --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary-color) 28%, transparent);
+}
+
+:root[data-theme="dark"][data-accent] {
+    --accent-soft: color-mix(in srgb, var(--primary-color) 15%, transparent);
+}
+
+[data-font="rounded"] {
+    --visitor-font: var(--font-nunito), sans-serif;
+}
+
+[data-font="sans"] {
+    --visitor-font: Arial, Helvetica, sans-serif;
+}
+
+[data-font="serif"] {
+    --visitor-font: Georgia, "Times New Roman", serif;
+}
+
+[data-font="mono"] {
+    --visitor-font: "Courier New", Courier, monospace;
+}
+
+[data-font="comic"] {
+    --visitor-font: "Comic Sans MS", "Comic Sans", var(--font-comic), cursive;
+}
+
+span[data-font] {
+    font-family: var(--visitor-font);
+}
+
+:root[data-size="larger"] {
+    font-size: 115%;
+}
+
+:root[data-motion="reduce"],
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+        scroll-behavior: auto !important;
+    }
+
+    .related-grid > a:hover {
+        transform: none;
+    }
+}
+
+:root[data-motion="reduce"] .related-grid > a:hover {
+    transform: none;
+}

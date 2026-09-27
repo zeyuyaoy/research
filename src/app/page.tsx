@@ -1,11 +1,12 @@
 import {after} from "next/server";
 import SearchableProjects from "@/components/SearchableProjects";
-import {parseArchiveState, toProjectSummary} from "@/lib/archive";
+import {parseArchiveState, type ProjectSummary, toProjectSummary} from "@/lib/archive";
 import {getPhotoSet} from "@/lib/conferenceSlides";
 import {getDirectorySnapshot} from "@/lib/directory";
 import {getOrcidWorks} from "@/lib/orcid";
 import {getRedisUrl} from "@/lib/redis";
-import type {CollectionView, ProjectView} from "@/lib/views";
+import type {CollectionView} from "@/lib/views";
+import {researchJsonLd} from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +22,14 @@ function toUrlSearchParams(input: SearchParams) {
 }
 
 export default async function Home({searchParams}: { searchParams: Promise<SearchParams> }) {
-    let projects: ProjectView[] = [];
+    let projects: ProjectSummary[] = [];
     let collections: CollectionView[] = [];
     let availability: "ready" | "unconfigured" | "unavailable" = getRedisUrl() ? "ready" : "unconfigured";
 
     if (availability === "ready") {
         try {
             const snapshot = await getDirectorySnapshot();
-            projects = snapshot.projects.map((project) => ({
-                ...toProjectSummary(project),
-                photoSet: getPhotoSet(project.metadata.photoSetId || project.slug),
-            }));
+            projects = snapshot.projects.map(toProjectSummary);
             collections = snapshot.collections.map((collection) => ({
                 ...collection,
                 photoSet: getPhotoSet(collection.id)
@@ -50,6 +48,8 @@ export default async function Home({searchParams}: { searchParams: Promise<Searc
     const initialState = parseArchiveState(toUrlSearchParams(await searchParams));
     return (
         <div className="site-shell">
+            <script type="application/ld+json"
+                    dangerouslySetInnerHTML={{__html: JSON.stringify(researchJsonLd).replace(/</g, "\\u003c")}}/>
             <div className="site-container">
                 <SearchableProjects initialLinks={projects} initialCollections={collections}
                                     availability={availability} initialState={initialState}/>

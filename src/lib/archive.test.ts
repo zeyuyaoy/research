@@ -1,6 +1,7 @@
 import {describe, expect, it} from "vitest";
 import {
     archiveUrl,
+    effectiveArtifacts,
     filterProjects,
     parseArchiveState,
     projectMatchesYear,
@@ -13,6 +14,7 @@ function project(overrides: Partial<PublicProject> = {}): PublicProject {
     return {
         slug: "alpha",
         target: "https://example.org/alpha",
+        targetType: "website",
         shortUrl: "/alpha",
         title: "Alpha protein atlas",
         description: "A spatial biology project",
@@ -43,6 +45,14 @@ function project(overrides: Partial<PublicProject> = {}): PublicProject {
 }
 
 describe("archive query model", () => {
+    it("uses resource types for generated actions without replacing authored output titles", () => {
+        const file = project({target: "https://example.org/study.pdf", targetType: "file"});
+        expect(effectiveArtifacts(file)[0]).toMatchObject({type: "file", title: "Open file"});
+        const authored = {...file, artifacts: [{...file.artifacts[0], url: file.target, title: "Conference handout"}]};
+        expect(effectiveArtifacts(authored)).toEqual(authored.artifacts);
+        expect(toProjectSummary(file).targetType).toBe("file");
+    });
+
     it("parses repeated and comma-separated tags and serializes only non-default state", () => {
         const state = parseArchiveState(new URLSearchParams("q=atlas&tag=Biology&tag=Spatial%20omics,AI&sort=title-asc&view=timeline&x=keep"));
         expect(state.tags).toEqual(["Biology", "Spatial omics", "AI"]);

@@ -6,8 +6,13 @@ import sitemap from "./sitemap";
 import {getDirectorySnapshot, getProject} from "@/lib/directory";
 import {parseMetadata, type ProjectRecord} from "@/lib/models";
 
-vi.mock("next/font/google", () => ({Nunito: () => ({variable: "--font-nunito"})}));
+vi.mock("next/font/google", () => ({
+    Nunito: () => ({variable: "--font-nunito"}),
+    Comic_Neue: () => ({variable: "--font-comic"})
+}));
 vi.mock("./globals.css", () => ({}));
+vi.mock("./tokens.css", () => ({}));
+vi.mock("./appearance.css", () => ({}));
 vi.mock("@/lib/directory", () => ({getDirectorySnapshot: vi.fn(), getProject: vi.fn()}));
 
 const origin = "https://research.zeyuyaoy.com";

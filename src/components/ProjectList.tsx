@@ -1,6 +1,6 @@
 "use client";
 
-import type {ProjectView} from "@/lib/views";
+import type {ProjectSummary} from "@/lib/archive";
 import ProjectCard from "./ProjectCard";
 
 export default function ProjectList({
@@ -10,11 +10,13 @@ export default function ProjectList({
                                         availability,
                                         hasCollectionResults,
                                         onTagSelect,
-                                        onReset
+                                        onReset,
+                                        selectedTags
                                     }: {
-    links: ProjectView[];
+    links: ProjectSummary[];
     isSearching: boolean;
     highlights?: string[];
+    selectedTags?: string[];
     availability: "ready" | "unconfigured" | "unavailable";
     hasCollectionResults: boolean;
     onTagSelect?: (tag: string) => void;
@@ -34,5 +36,6 @@ export default function ProjectList({
     }
     return <div className="archive-list">{links.map((project) => <ProjectCard key={project.slug} project={project}
                                                                               highlights={highlights}
+                                                                              selectedTags={selectedTags}
                                                                               onTagSelect={onTagSelect}/>)}</div>;
 }

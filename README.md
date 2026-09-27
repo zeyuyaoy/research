@@ -40,11 +40,11 @@ Open the local site at `http://localhost:3000`; the dashboard is at `/admin`.
 ### Data model
 
 - `link:<slug>` — canonical HTTP(S) target
-- `meta:<slug>` — hash containing the core title, descriptions, comma-separated legacy `tags`, redirect/date/repository/photo fields, plus JSON arrays for `researchAreas`, `technologies`, `methods`, `organizations`, `collaborators`, and typed `artifacts`
+- `meta:<slug>` — hash containing the core title, descriptions, comma-separated `tags`, redirect/date/repository/photo fields, plus JSON arrays for `researchAreas`, `technologies`, `methods`, `organizations`, `collaborators`, and typed `artifacts`
 - `count:<slug>` — all-time successful redirect count
 - `collection:<id>` — hash containing `name`, `description`, comma-separated ordered `projects`, comma-separated `tags`, and timestamps
 
-Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Structured fields are optional and malformed stored JSON safely normalizes to empty arrays, so older records need no migration. Deleting a project also removes its slug from collections. Photo sets are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug. Canonical detail pages live at `/projects/<slug>` while `/<slug>` remains the counted external redirect.
+Dates accept `YYYY`, `YYYY-MM`, or `YYYY-MM-DD`. Structured fields are optional and malformed stored JSON safely normalizes to empty arrays. Deleting a project also removes its slug from collections. Photo sets are defined in `src/data/photoSets.yml`; a project uses its `photoSetId` or, by default, its slug. Canonical detail pages live at `/projects/<slug>` while `/<slug>` remains the counted external redirect.
 
 ORCID responses are cached for one hour.
 

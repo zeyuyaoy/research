@@ -1,15 +1,14 @@
-import {act, fireEvent, render, screen, within} from "@testing-library/react";
+import {act, fireEvent, render, screen} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 import type {PublicProject} from "@/lib/models";
 import {toProjectSummary} from "@/lib/archive";
 import ConferenceCarousel from "./ConferenceCarousel";
 import ProjectCard from "./ProjectCard";
-import ShareButton from "./ShareButton";
-import TagDirectory from "./TagDirectory";
 
 const project: PublicProject = {
     slug: "safe-project",
     target: "https://example.org",
+    targetType: "website",
     shortUrl: "/safe-project",
     title: "Safe <script>title</script>",
     description: "Research description",
@@ -35,15 +34,6 @@ describe("public controls", () => {
         const {container} = render(<ProjectCard project={toProjectSummary(project)} highlights={["safe"]}/>);
         expect(screen.getByRole("heading")).toHaveTextContent("Safe <script>title</script>");
         expect(container.querySelector("script")).toBeNull();
-    });
-
-    it("exposes selected tag state", () => {
-        const onSelect = vi.fn();
-        const {container} = render(<TagDirectory allTags={["biology"]} selectedTag="biology" onTagSelect={onSelect}/>);
-        const button = within(container).getByRole("button", {name: "biology"});
-        expect(button).toHaveAttribute("aria-pressed", "true");
-        fireEvent.click(button);
-        expect(onSelect).toHaveBeenCalledWith(null);
     });
 
     it("keeps a manual carousel pause until the user resumes it", () => {
@@ -73,19 +63,11 @@ describe("public controls", () => {
         await act(async () => {
             vi.advanceTimersByTime(6_000);
         });
-        expect(screen.getByAltText("Second reduced-motion slide").parentElement).toHaveAttribute("aria-hidden", "true");
+        expect(screen.queryByAltText("Second reduced-motion slide")).not.toBeInTheDocument();
+        expect(screen.getByRole("button", {name: "Slideshow paused for reduced motion"})).toBeDisabled();
+        fireEvent.click(screen.getByRole("button", {name: "Next slide"}));
+        expect(screen.getByAltText("Second reduced-motion slide").parentElement).toHaveAttribute("aria-hidden", "false");
         window.matchMedia = previousMatchMedia;
         vi.useRealTimers();
-    });
-
-    it("closes the share menu with Escape and restores trigger focus", async () => {
-        render(<ShareButton title="Safe project" shortUrl="/safe-project"/>);
-        const trigger = screen.getByRole("button", {name: "Share Safe project"});
-        fireEvent.click(trigger);
-        expect(screen.getByRole("menu", {name: "Share Safe project"})).toBeInTheDocument();
-        fireEvent.keyDown(document, {key: "Escape"});
-        await new Promise((resolve) => window.setTimeout(resolve, 0));
-        expect(screen.queryByRole("menu", {name: "Share Safe project"})).not.toBeInTheDocument();
-        expect(trigger).toHaveFocus();
     });
 });

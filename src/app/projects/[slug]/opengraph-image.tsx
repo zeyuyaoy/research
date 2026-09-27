@@ -13,21 +13,21 @@ export default async function Image({params}: { params: Promise<{ slug: string }
     } catch { /* Render a stable fallback. */
     }
     const title = project?.metadata.title || "Research project";
-    const description = project?.metadata.description || "Peter's research archive";
+    const description = project?.metadata.description || "Research by Zeyu Yao";
     return new ImageResponse(<div style={{
         width: "100%",
         height: "100%",
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        background: "#f7f5ef",
-        color: "#17211d",
+        background: "#fdfbf8",
+        color: "#2b2620",
         padding: "72px 84px",
         fontFamily: "sans-serif"
     }}>
         <div style={{
             display: "flex",
-            color: "#47705f",
+            color: "#496f61",
             fontSize: 28,
             letterSpacing: 3,
             textTransform: "uppercase"
@@ -39,11 +39,11 @@ export default async function Image({params}: { params: Promise<{ slug: string }
             <div style={{
                 display: "flex",
                 fontSize: 30,
-                color: "#5d665f",
+                color: "#6b6660",
                 maxWidth: 900,
                 lineHeight: 1.4
             }}>{description}</div>
         </div>
-        <div style={{display: "flex", fontSize: 24, color: "#47705f"}}>{researchHostname}</div>
+        <div style={{display: "flex", fontSize: 24, color: "#496f61"}}>{researchHostname}</div>
     </div>, size);
 }

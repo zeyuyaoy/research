@@ -63,14 +63,6 @@ try {
     console.error("Failed to load photoSets.yml:", error);
 }
 
-export function getSlidesFor(key?: string) {
-    return key ? photoSets[key.toLowerCase()]?.slides : undefined;
-}
-
 export function getPhotoSet(key?: string) {
     return key ? photoSets[key.toLowerCase()] : undefined;
-}
-
-export function getAllPhotoSets() {
-    return Object.values(photoSets).toSorted((a, b) => (b.date || "").localeCompare(a.date || "") || a.id.localeCompare(b.id));
 }

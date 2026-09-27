@@ -15,15 +15,15 @@ import type {ArtifactType, ProjectArtifact} from "@/lib/models";
 const ICONS: Record<ArtifactType, typeof FileText> = {
     publication: BookOpen, preprint: FileText, poster: FileImage, talk: Mic2,
     presentation: Presentation, award: Award, code: Code2, dataset: Database,
-    video: PlayCircle, website: ExternalLink, other: FileText,
+    video: PlayCircle, file: FileText, website: ExternalLink, other: FileText,
 };
 
-export function artifactProvider(artifact: ProjectArtifact) {
+function artifactProvider(artifact: ProjectArtifact) {
     if (artifact.venue) return artifact.venue;
     if (!artifact.url) return null;
     try {
         const host = new URL(artifact.url).hostname.replace(/^www\./, "");
-        if (host === "youtu.be" || host.endsWith("youtube.com")) return "YouTube";
+        if (host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com")) return "YouTube";
         if (host === "github.com") return "GitHub";
         if (host === "doi.org") return "DOI";
         return host;
@@ -45,4 +45,3 @@ export default function ArtifactLink({artifact, compact = false}: { artifact: Pr
                              target="_blank" rel="noopener noreferrer">{content}<span className="sr-only"> (opens in a new tab)</span></a> :
         <div className={`artifact-link ${compact ? "artifact-link-compact" : ""}`}>{content}</div>;
 }
-

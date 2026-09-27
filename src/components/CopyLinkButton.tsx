@@ -2,6 +2,7 @@
 
 import {Check, Link as LinkIcon} from "lucide-react";
 import {useState} from "react";
+import {site} from "@/lib/site";
 
 export default function CopyLinkButton({path, label = "Copy link", className = ""}: {
     path: string;
@@ -12,7 +13,7 @@ export default function CopyLinkButton({path, label = "Copy link", className = "
     return <>
         <button type="button" className={`copy-link ${className}`} onClick={async () => {
             try {
-                await navigator.clipboard.writeText(new URL(path, window.location.origin).toString());
+                await navigator.clipboard.writeText(new URL(path, site.url).toString());
                 setMessage("Link copied");
             } catch {
                 setMessage("Unable to copy link");
@@ -24,4 +25,3 @@ export default function CopyLinkButton({path, label = "Copy link", className = "
         <span className="sr-only" aria-live="polite">{message}</span>
     </>;
 }
-

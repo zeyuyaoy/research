@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         if (format === "csv") {
             const rows: ExportRow[] = records.map((record) => ({
                 ...record,
+                targetType: record.targetType || "",
                 description: record.description || "",
                 longDescription: record.longDescription || "",
                 tags: record.tags.join(","),
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
                 photoSetId: record.photoSetId || "",
                 updatedAt: record.updatedAt || "",
             }));
-            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "source", ...(includeClicks ? ["clicks"] : []), "permanent", "title", "description", "longDescription", "tags", "researchAreas", "technologies", "methods", "organizations", "collaborators", "artifacts", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
+            const headers = rows.length ? Object.keys(rows[0]) : ["slug", "target", "source", ...(includeClicks ? ["clicks"] : []), "targetType", "permanent", "title", "description", "longDescription", "tags", "researchAreas", "technologies", "methods", "organizations", "collaborators", "artifacts", "startDate", "endDate", "githubRepo", "photoSetId", "createdAt", "updatedAt"];
             const csv = [headers.join(","), ...rows.map((row) => headers.map((header) => csvCell(row[header] ?? "")).join(","))].join("\n");
             return new NextResponse(csv, {
                 headers: {

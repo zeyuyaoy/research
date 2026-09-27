@@ -1,10 +1,10 @@
 "use client";
 
-import {Code2, ExternalLink, FileText, FilterX, Moon, Search, Tag} from "lucide-react";
+import {Code2, ExternalLink, FileText, FilterX, Moon, Search, Tag, X} from "lucide-react";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {useRouter} from "next/navigation";
 import {compareProjectSummaries, type ProjectSummary} from "@/lib/archive";
-import {currentTheme, setDocumentTheme} from "./ThemeToggle";
+import {appearanceStore} from "@/lib/theme-store";
 import {site} from "@/lib/site";
 
 type PaletteItem = {
@@ -71,9 +71,9 @@ export default function CommandPalette({open, onClose, projects, onTagSelect, on
             {
                 id: "theme",
                 group: "Actions",
-                label: `Switch to ${currentTheme() === "dark" ? "light" : "dark"} theme`,
+                label: `Switch to ${appearanceStore.getSnapshot().resolvedMode === "dark" ? "light" : "dark"} theme`,
                 icon: Moon,
-                run: closeThen(() => setDocumentTheme(currentTheme() === "dark" ? "light" : "dark"))
+                run: closeThen(appearanceStore.toggle)
             },
         ] satisfies PaletteItem[]).filter((item) => !q || item.label.toLowerCase().includes(q));
         const links: PaletteItem[] = EXTERNAL_LINKS.filter((link) => !q || link.label.toLowerCase().includes(q)).map((link) => ({
@@ -117,13 +117,11 @@ export default function CommandPalette({open, onClose, projects, onTagSelect, on
                    placeholder="Search projects or run a command…" autoComplete="off" role="combobox"
                    aria-expanded="true" aria-controls="command-results" aria-activedescendant={items[active]?.id}
                    onKeyDown={(event) => {
-                       if (event.key === "ArrowDown") {
+                       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
                            event.preventDefault();
-                           setActive((value) => Math.min(value + 1, items.length - 1));
-                       }
-                       if (event.key === "ArrowUp") {
-                           event.preventDefault();
-                           setActive((value) => Math.max(value - 1, 0));
+                           const next = Math.max(0, Math.min(active + (event.key === "ArrowDown" ? 1 : -1), items.length - 1));
+                           setActive(next);
+                           if (items[next]) document.getElementById(items[next].id)?.scrollIntoView({block: "nearest"});
                        }
                        if (event.key === "Enter" && items[active]) {
                            event.preventDefault();
@@ -134,7 +132,8 @@ export default function CommandPalette({open, onClose, projects, onTagSelect, on
                            dismiss();
                        }
                    }}/>
-            <kbd>Esc</kbd>
+            <button type="button" className="icon-button command-close" aria-label="Close command palette"
+                    title="Close (Esc)" onClick={dismiss}><X aria-hidden/></button>
         </div>
         <div id="command-results" role="listbox" className="command-results">
             {groups.map((group) => {

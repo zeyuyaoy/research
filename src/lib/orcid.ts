@@ -165,5 +165,3 @@ export async function getOrcidWorks(orcidId: string): Promise<ProjectRecord[]> {
         return [];
     }
 }
-
-export {targetForWork};

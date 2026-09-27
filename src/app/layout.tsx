@@ -1,34 +1,48 @@
 import type {Metadata} from "next";
-import {Nunito} from "next/font/google";
+import {Comic_Neue, Nunito} from "next/font/google";
 import "./globals.css";
+import "./tokens.css";
+import "./appearance.css";
 import {Analytics} from "@vercel/analytics/next";
 import {site} from "@/lib/site";
+import {appearanceBootstrapScript} from "@/lib/appearance";
+import AppearanceRuntime from "@/components/AppearanceRuntime";
+import SiteFooter from "@/components/SiteFooter";
 
 const nunito = Nunito({
     variable: "--font-nunito",
     subsets: ["latin"],
 });
+const comic = Comic_Neue({
+    subsets: ["latin"],
+    weight: ["400", "700"],
+    variable: "--font-comic",
+    display: "swap",
+    preload: false
+});
 
 export const metadata: Metadata = {
     metadataBase: new URL(site.url),
-    title: {default: "Peter's Research Projects", template: "%s | Peter's Research"},
-    description: "Curated collection of my research work, projects, and publications.",
+    title: {default: "Research | Zeyu Yao", template: "%s | Zeyu Yao · Research"},
+    description: site.description,
+    authors: [{name: "Zeyu Yao", url: site.portfolioUrl}],
+    manifest: "/site.webmanifest",
     alternates: {canonical: "/"},
     openGraph: {
-        type: "website", url: "/", siteName: "Peter's Research Projects",
-        title: "Peter's Research Projects", description: "Per aspera ad astra!",
+        type: "website", url: "/", siteName: "Zeyu Yao · Research",
+        title: "Research | Zeyu Yao", description: site.description,
         images: ["/opengraph-image"],
     },
     twitter: {
         card: "summary_large_image",
-        title: "Peter's Research Projects",
-        description: "Per aspera ad astra!",
+        title: "Research | Zeyu Yao",
+        description: site.description,
         images: ["/opengraph-image"]
     },
     icons: {
-        icon: "/favicon-32x32.png",
-        apple: "/apple-touch-icon.png",
-        shortcut: "/favicon-16x16.png",
+        icon: {url: "/favicon-32x32.png", type: "image/png", sizes: "32x32"},
+        apple: {url: "/apple-touch-icon.png", sizes: "180x180"},
+        shortcut: "/favicon-32x32.png",
     },
 };
 
@@ -36,8 +50,8 @@ export const viewport = {
     width: "device-width",
     initialScale: 1,
     themeColor: [
-        {media: "(prefers-color-scheme: light)", color: "#f7f5ef"},
-        {media: "(prefers-color-scheme: dark)", color: "#171d1a"},
+        {media: "(prefers-color-scheme: light)", color: "#fdfbf8"},
+        {media: "(prefers-color-scheme: dark)", color: "#1f1d1a"},
     ],
 };
 
@@ -47,27 +61,15 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" suppressHydrationWarning>
+        <html lang="en" className={`${nunito.variable} ${comic.variable}`} suppressHydrationWarning>
         <head>
-            <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
-            <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png"/>
-            <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png"/>
-            <link rel="manifest" href="/site.webmanifest"/>
-            <script
-                id="theme-initializer"
-                dangerouslySetInnerHTML={{
-                    __html: `
-              try {
-                const theme = localStorage.getItem('theme') || 
-                  (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-                document.documentElement.setAttribute('data-theme', theme);
-              } catch {}
-            `,
-                }}
-            />
+            <script id="appearance-initializer" dangerouslySetInnerHTML={{__html: appearanceBootstrapScript()}}/>
         </head>
-        <body className={`${nunito.variable} antialiased`}>
-        {children}
+        <body>
+        <AppearanceRuntime/>
+        <a className="skip-link" href="#main-content">Skip to content</a>
+        <div className="site-body">{children}</div>
+        <SiteFooter/>
         <Analytics/>
         </body>
         </html>
