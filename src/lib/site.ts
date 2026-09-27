@@ -1,3 +1,5 @@
+import type {ProjectMetadata} from "./models";
+
 export const site = {
     name: "Peter's workshed",
     url: "https://research.zeyuyaoy.com",
@@ -5,10 +7,28 @@ export const site = {
     githubUrl: "https://github.com/zeyuyaoy",
     resumeUrl: "https://zeyuyaoy.com/resume",
     description:
-        "Research by Zeyu Yao (Peter): computational biology projects, publications, talks, and research outputs.",
+        "I'm Peter. This is where I share my research projects, publications, and talks. Browse by topic and explore the work behind them.",
 } as const;
 
 export const researchHostname = new URL(site.url).hostname;
+
+export function projectDescription(
+    project: Pick<ProjectMetadata, "title" | "description" | "longDescription">,
+) {
+    const description = (
+        [project.description, project.longDescription].find((value) => value?.trim()) ||
+        `Explore ${project.title}, a research project by Peter.`
+    )
+        .replace(/\s+/g, " ")
+        .trim();
+    const characters = Array.from(description);
+    if (characters.length <= 180) {
+        return description;
+    }
+    const preview = characters.slice(0, 179).join("");
+    const wordBoundary = preview.lastIndexOf(" ");
+    return `${wordBoundary > 0 ? preview.slice(0, wordBoundary) : preview}…`;
+}
 
 export const researchJsonLd = {
     "@context": "https://schema.org",

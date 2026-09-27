@@ -3,6 +3,7 @@ import {researchHostname, site} from "@/lib/site";
 
 export const size = {width: 1200, height: 630};
 export const contentType = "image/png";
+export const alt = `${site.name} — research projects, publications, and talks by Peter`;
 
 export default function Image() {
     return new ImageResponse(
@@ -32,9 +33,7 @@ export default function Image() {
             </div>
             <div style={{display: "flex", flexDirection: "column", gap: 28}}>
                 <div style={{display: "flex", fontSize: 76, fontWeight: 700}}>{site.name}</div>
-                <div style={{display: "flex", fontSize: 34, color: "#6b6660"}}>
-                    Projects, publications, talks, and research outputs.
-                </div>
+                <div style={{display: "flex", fontSize: 34, color: "#6b6660"}}>{site.description}</div>
             </div>
             <div style={{display: "flex", fontSize: 24, color: "#496f61"}}>{researchHostname}</div>
         </div>,
