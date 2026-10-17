@@ -79,6 +79,21 @@ describe("authoritative research metadata", () => {
     expect(await response.json()).toMatchObject({ name: site.name, description: site.description });
   });
 
+  it("references every supplied favicon through page metadata and the manifest", async () => {
+    expect(metadata.icons).toEqual({
+      icon: [
+        { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
+        { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
+      ],
+      apple: { url: "/apple-touch-icon.png", sizes: "180x180" },
+      shortcut: "/favicon.ico",
+    });
+    expect((await manifest().json()).icons).toEqual([
+      { src: "/android-chrome-192x192.png", sizes: "192x192", type: "image/png" },
+      { src: "/android-chrome-512x512.png", sizes: "512x512", type: "image/png" },
+    ]);
+  });
+
   it.each(projects)(
     "uses the canonical project path for $slug and its social images",
     async (project) => {
